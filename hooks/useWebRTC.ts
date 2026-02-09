@@ -1,3 +1,4 @@
+// hooks/useWebRTC.ts
 import {
   WebRTCIceCandidate,
   WebRTCSessionDescription,
@@ -11,12 +12,7 @@ import {
   RTCSessionDescription,
 } from "react-native-webrtc";
 
-console.log("RN-WEBRTC CHECK:", {
-  mediaDevices,
-  getUserMedia: mediaDevices?.getUserMedia,
-});
-
-type UseWebRTCParams = {
+type Params = {
   enabled: boolean;
   isMuted: boolean;
   onSendOffer: (sdp: WebRTCSessionDescription) => void;
@@ -30,16 +26,21 @@ export function useWebRTC({
   onSendOffer,
   onSendAnswer,
   onSendIce,
-}: UseWebRTCParams) {
+}: Params) {
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const offerCreatedRef = useRef(false);
+
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
 
   /* =======================
-     INIT PEER CONNECTION
+     INIT / CLEANUP
   ======================= */
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      cleanup();
+      return;
+    }
 
     const pc = new RTCPeerConnection({
       iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -61,23 +62,16 @@ export function useWebRTC({
       });
     };
 
-    pcWithEvents.onaddstream = (event) => {
-      setRemoteStream(event.stream);
-    };
-
     pcRef.current = pc;
 
-    return () => {
-      // DO NOT cleanup stream here
-      pc.close();
-      pcRef.current = null;
-    };
-  }, [enabled, onSendIce]);
+    return () => cleanup();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled]);
 
   /* =======================
-     LOCAL AUDIO
+     LOCAL AUDIO (ONCE)
   ======================= */
-  const ensureLocalAudioStream = useCallback(async () => {
+  const ensureLocalStream = useCallback(async () => {
     if (localStreamRef.current) return localStreamRef.current;
     if (!pcRef.current) return null;
 
@@ -112,8 +106,18 @@ export function useWebRTC({
   ======================= */
   const createOffer = useCallback(async () => {
     if (!pcRef.current) return;
+    if (pcRef.current.signalingState !== "stable") {
+      console.warn(
+        "Skip createOffer, signalingState:",
+        pcRef.current.signalingState
+      );
+      return;
+    }
+    if (offerCreatedRef.current) return;
 
-    await ensureLocalAudioStream();
+    offerCreatedRef.current = true;
+
+    await ensureLocalStream();
 
     const offer = await pcRef.current.createOffer();
     await pcRef.current.setLocalDescription(offer);
@@ -122,7 +126,7 @@ export function useWebRTC({
       type: "offer",
       sdp: offer.sdp!,
     });
-  }, [ensureLocalAudioStream, onSendOffer]);
+  }, [ensureLocalStream, onSendOffer]);
 
   const handleOffer = useCallback(
     async (sdp: WebRTCSessionDescription) => {
@@ -130,7 +134,7 @@ export function useWebRTC({
 
       await pcRef.current.setRemoteDescription(new RTCSessionDescription(sdp));
 
-      await ensureLocalAudioStream();
+      await ensureLocalStream();
 
       const answer = await pcRef.current.createAnswer();
       await pcRef.current.setLocalDescription(answer);
@@ -140,7 +144,7 @@ export function useWebRTC({
         sdp: answer.sdp!,
       });
     },
-    [ensureLocalAudioStream, onSendAnswer]
+    [ensureLocalStream, onSendAnswer]
   );
 
   const handleAnswer = useCallback(async (sdp: WebRTCSessionDescription) => {
@@ -152,15 +156,17 @@ export function useWebRTC({
   /* =======================
      ICE
   ======================= */
-  const addIceCandidate = useCallback(async (candidate: WebRTCIceCandidate) => {
+  const addIceCandidate = useCallback(async (c: WebRTCIceCandidate) => {
     if (!pcRef.current) return;
-    await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+    await pcRef.current.addIceCandidate(new RTCIceCandidate(c));
   }, []);
 
   /* =======================
-     CLEANUP (MANUAL)
+     CLEANUP
   ======================= */
   const cleanup = useCallback(() => {
+    offerCreatedRef.current = false;
+
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
 
@@ -179,3 +185,19 @@ export function useWebRTC({
     cleanup,
   };
 }
+
+// const pcWithEvents = pc as unknown as {
+//   onicecandidate?: (event: any) => void;
+//   onaddstream?: (event: any) => void;
+// };
+
+// pcWithEvents.onicecandidate = (event) => {
+//   const c = event?.candidate;
+//   if (!c || !c.candidate) return;
+
+//   onSendIce({
+//     candidate: c.candidate,
+//     sdpMid: c.sdpMid ?? undefined,
+//     sdpMLineIndex: c.sdpMLineIndex ?? undefined,
+//   });
+// };
