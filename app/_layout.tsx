@@ -1,24 +1,74 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
+import { Slot } from "expo-router";
+import React, { useEffect } from "react";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { CallProvider } from "@/contexts/CallContext";
+import { useAuthStore } from "@/stores/auth.store";
 
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+import { FloatingCallBar } from "@/components/FloatingCallBar";
+import GlobalLoading from "@/components/GlobalLoading";
+import { IncomingCallOverlay } from "@/components/IncomingCallOverlay";
+import AppToast from "@/components/Toast";
+import { socketManager } from "@/socket/SocketManager";
+
+function AuthBootstrap({ children }: { children: React.ReactNode }) {
+  const { isLoggedIn, token, isHydrated } = useAuthStore();
+
+  useEffect(() => {
+    if (!isHydrated) return;
+
+    if (isLoggedIn && token) {
+      socketManager.updateAuthToken(token);
+      socketManager.connect();
+    } else {
+      socketManager.disconnect();
+    }
+  }, [isHydrated, isLoggedIn, token]);
+
+  return <>{children}</>;
+}
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  // const pathname = usePathname();
+  // const { isLoggedIn } = useAuthStore();
+
+  // tunggu hydration
+  // if (!isHydrated) {
+  //   return <AuthBootstrap>{null}</AuthBootstrap>;
+  // }
+
+  // const isLoginRoute = pathname === "/login";
+
+  // belum login → login (HANYA INI)
+  // if (!isLoggedIn && !isLoginRoute) {
+  //   return <Redirect href="/login" />;
+  // }
+
+  let DevManual: React.ComponentType<unknown> | null = null;
+  if (__DEV__) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    DevManual = require("./dev/ManualAuthTester")
+      .default as React.ComponentType<unknown>;
+  }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <AuthBootstrap>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <CallProvider>
+          <SafeAreaView style={{ flex: 1 }}>
+            <Slot />
+
+            {DevManual ? React.createElement(DevManual) : null}
+
+            <AppToast />
+            <GlobalLoading />
+            <IncomingCallOverlay />
+            <FloatingCallBar />
+            {/* <CallDebugPanel /> */}
+          </SafeAreaView>
+        </CallProvider>
+      </GestureHandlerRootView>
+    </AuthBootstrap>
   );
 }
