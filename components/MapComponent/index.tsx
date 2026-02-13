@@ -13,6 +13,7 @@ import {
 } from "@/constants/theme";
 import useHandleLocation from "@/hooks/useHandleLocation";
 import { useLocationTracker } from "@/hooks/useLocationTracker";
+import { useOperationStore } from "@/stores/operation.store";
 import { shortestAngleDiff } from "@/utils/helpers";
 import { storage } from "@/utils/storage";
 import { Fontisto, Ionicons } from "@expo/vector-icons";
@@ -56,6 +57,7 @@ const MapComponent = () => {
     refreshStatus,
     setMapReady,
   } = useLocationTracker();
+  const operation = useOperationStore((s) => s.operation);
   const { listGPS, actions } = useHandleLocation();
 
   const [mapReady, setMapReadyState] = useState(false);
@@ -124,7 +126,7 @@ const MapComponent = () => {
 
   // get data all device
   useEffect(() => {
-    actions.onGetGPS();
+    actions.onGetGroupGPS(operation?.activity_id ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -220,17 +222,25 @@ const MapComponent = () => {
           }}
         >
           {listGPS.map((data: any, index: any) => {
+            const device_id = data?.popup.split(" ")[1];
             const currentUser =
-              data.device_id === storage.getString("user.username");
+              device_id === storage.getString("user.username");
             const lat = currentUser
               ? lastLocation?.coords.latitude
-              : parseFloat(data?.latitute);
+              : parseFloat(data?.coords[0]);
             const long = currentUser
               ? lastLocation?.coords.longitude
-              : parseFloat(data?.longitude);
+              : parseFloat(data?.coords[1]);
+            const dataSelected = {
+              device_id,
+              lat,
+              long,
+              id: data.id,
+              is_online: data.is_online,
+            };
             return (
               <Marker
-                key={data?.device_id}
+                key={data.unit_id}
                 coordinate={{
                   latitude: lat!,
                   longitude: long!,
@@ -239,7 +249,7 @@ const MapComponent = () => {
                 anchor={{ x: 0.5, y: 1 }}
                 onPress={() => {
                   if (!isUserInteracting) {
-                    actionsLocTracker.onFocusVehicle(data, index);
+                    actionsLocTracker.onFocusVehicle(dataSelected, index);
                   }
                 }}
                 style={{ width: 56, height: 56 }}
@@ -361,15 +371,33 @@ const MapComponent = () => {
           <FlatList
             ref={listRef}
             data={listGPS}
-            keyExtractor={(item: any) => item.device_id}
+            keyExtractor={(item: any) => item.unit_id}
             renderItem={({ item, index }: any) => {
+              const device_id = item?.popup.split(" ")[1];
+              const currentUser =
+                device_id === storage.getString("user.username");
+              const lat = currentUser
+                ? lastLocation?.coords.latitude
+                : parseFloat(item?.coords[0]);
+              const long = currentUser
+                ? lastLocation?.coords.longitude
+                : parseFloat(item?.coords[1]);
+              const dataSelected = {
+                device_id,
+                lat,
+                long,
+                id: item.id,
+                is_online: item.is_online,
+              };
               return (
                 <VehicleItem
                   item={item}
                   index={index}
                   selectedId={selectedId}
                   highlight={highlight}
-                  onPress={() => actionsLocTracker.onFocusVehicle(item, index)}
+                  onPress={() =>
+                    actionsLocTracker.onFocusVehicle(dataSelected, index)
+                  }
                 />
               );
             }}

@@ -1,138 +1,91 @@
+// socket/callEvents.ts
 import { socketManager } from "./SocketManager";
 import type {
-  AnswerPayload,
+  CallAcceptedPayload,
   CallActionPayload,
+  CallCanceledPayload,
+  CallEndedPayload,
+  CallRejectedPayload,
   CancelCallPayload,
-  IceCandidatePayload,
   IncomingCallPayload,
-  OfferPayload,
   RejectCallPayload,
   StartCallPayload,
 } from "./socketTypes";
 
 /* =======================
-   EMIT (Client → Server)
+   INTERNAL HELPER
 ======================= */
-
-export function startCall(payload: StartCallPayload) {
-  const socket = socketManager.getSocket();
-  if (!socket?.connected) return;
-
-  socket.emit("call_user", payload);
-}
-
-export function acceptCall(payload: CallActionPayload) {
-  const socket = socketManager.getSocket();
-  if (!socket?.connected) return;
-
-  socket.emit("accept_call", payload);
-}
-
-export function rejectCall(payload: RejectCallPayload) {
-  const socket = socketManager.getSocket();
-  if (!socket?.connected) return;
-
-  socket.emit("reject_call", payload);
-}
-
-export function cancelCall(payload: CancelCallPayload) {
-  const socket = socketManager.getSocket();
-  if (!socket?.connected) return;
-
-  socket.emit("cancel_call", payload);
-}
-
-export function endCall() {
-  const socket = socketManager.getSocket();
-  if (!socket?.connected) return;
-
-  socket.emit("end_call");
+function getSocket() {
+  return socketManager.getSocket();
 }
 
 /* =======================
-   LISTEN (Server → Client)
+   CLIENT → SERVER (EMIT)
 ======================= */
 
-export function onIncomingCall(
-  handler: (payload: IncomingCallPayload) => void
-) {
-  const socket = socketManager.getSocket();
-  if (!socket) return;
-
-  socket.off("incoming_call", handler);
-  socket.on("incoming_call", handler);
+// Caller start call
+export function startCall(payload: StartCallPayload) {
+  getSocket()?.emit("call_user", payload);
 }
 
-export function onCallAccepted(handler: () => void) {
-  const socket = socketManager.getSocket();
-  if (!socket) return;
-
-  socket.off("call_accepted", handler);
-  socket.on("call_accepted", handler);
+// Callee accept
+export function acceptCall(payload: CallActionPayload) {
+  getSocket()?.emit("accept_call", payload);
 }
 
-export function onCallRejected(
-  handler: (payload: { roomId: string; rejectedBy: number }) => void
-) {
-  const socket = socketManager.getSocket();
-  if (!socket) return;
-
-  socket.off("call_rejected", handler);
-  socket.on("call_rejected", handler);
+// Callee reject
+export function rejectCall(payload: RejectCallPayload) {
+  getSocket()?.emit("reject_call", payload);
 }
 
-export function onCallCancelled(
-  handler: (payload: { roomId: string; canceledBy: number }) => void
-) {
-  const socket = socketManager.getSocket();
-  if (!socket) return;
-
-  socket.off("call_canceled", handler);
-  socket.on("call_canceled", handler);
+// Caller cancel before accepted
+export function cancelCall(payload: CancelCallPayload) {
+  getSocket()?.emit("cancel_call", payload);
 }
 
-export function onCallEnded(handler: (payload: { peerId: string }) => void) {
-  const socket = socketManager.getSocket();
-  if (!socket) return;
-
-  socket.off("call_ended", handler);
-  socket.on("call_ended", handler);
+// Either side end call
+export function endCall(payload: CallEndedPayload) {
+  getSocket()?.emit("end_call", payload);
 }
 
-/* ===== WEBRTC ===== */
-/* ===== SEND ===== */
+/* =======================
+   SERVER → CLIENT (ON)
+======================= */
 
-export function sendOffer(payload: OfferPayload) {
-  socketManager.getSocket()?.emit("webrtc_offer", payload);
+export function onIncomingCall(cb: (payload: IncomingCallPayload) => void) {
+  const socket = getSocket();
+  if (!socket) return () => {};
+
+  socket.on("incoming_call", cb);
+  return () => socket.off("incoming_call", cb);
 }
 
-export function sendAnswer(payload: AnswerPayload) {
-  socketManager.getSocket()?.emit("webrtc_answer", payload);
+export function onCallAccepted(cb: (payload: CallAcceptedPayload) => void) {
+  const socket = getSocket();
+  if (!socket) return () => {};
+
+  socket.on("call_accepted", cb);
+  return () => socket.off("call_accepted", cb);
 }
 
-export function sendIceCandidate(payload: IceCandidatePayload) {
-  socketManager.getSocket()?.emit("ice_candidate", payload);
+export function onCallRejected(cb: (payload: CallRejectedPayload) => void) {
+  const socket = getSocket();
+  if (!socket) return () => {};
+
+  socket.on("call_rejected", cb);
+  return () => socket.off("call_rejected", cb);
 }
 
-/* ===== RECEIVE ===== */
+export function onCallCancelled(cb: (payload: CallCanceledPayload) => void) {
+  const socket = getSocket();
+  if (!socket) return () => {};
 
-export function onOffer(handler: (p: OfferPayload) => void) {
-  const s = socketManager.getSocket();
-  if (!s) return;
-  s.off("webrtc_offer", handler);
-  s.on("webrtc_offer", handler);
+  socket.on("call_canceled", cb);
+  return () => socket.off("call_canceled", cb);
 }
 
-export function onAnswer(handler: (p: AnswerPayload) => void) {
-  const s = socketManager.getSocket();
-  if (!s) return;
-  s.off("webrtc_answer", handler);
-  s.on("webrtc_answer", handler);
-}
-
-export function onIceCandidate(handler: (p: IceCandidatePayload) => void) {
-  const s = socketManager.getSocket();
-  if (!s) return;
-  s.off("ice_candidate", handler);
-  s.on("ice_candidate", handler);
+export function onCallEnded(cb: any) {
+  return socketManager.onConnected((socket) => {
+    socket.on("call_ended", cb);
+  });
 }

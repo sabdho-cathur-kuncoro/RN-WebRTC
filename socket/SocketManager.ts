@@ -3,22 +3,11 @@ import { AppState, AppStateStatus } from "react-native";
 import { io, Socket } from "socket.io-client";
 
 import { Config } from "@/constants/API";
-import { storage } from "@/utils/storage";
-import type {
+import {
   ClientToServerEvents,
   ServerToClientEvents,
   SocketStatus,
 } from "./socketTypes";
-
-/**
- * SocketManager
- *
- * - Singleton
- * - Auto init
- * - Tidak pakai flag isConnected manual
- * - AppState-aware
- * - Token-aware
- */
 class SocketManager {
   private static instance: SocketManager;
 
@@ -28,6 +17,26 @@ class SocketManager {
   private status: SocketStatus = "idle";
   private listeners = new Set<(status: SocketStatus) => void>();
   private appState: AppStateStatus = "active";
+  private authToken: string | null = null;
+
+  private onConnectListeners = new Set<
+    (socket: Socket<ServerToClientEvents, ClientToServerEvents>) => void
+  >();
+
+  onConnected(
+    cb: (socket: Socket<ServerToClientEvents, ClientToServerEvents>) => void
+  ) {
+    this.onConnectListeners.add(cb);
+
+    // jika sudah connect, panggil langsung
+    if (this.socket?.connected) {
+      cb(this.socket);
+    }
+
+    return () => {
+      this.onConnectListeners.delete(cb);
+    };
+  }
 
   private constructor() {
     AppState.addEventListener("change", this.handleAppStateChange);
@@ -88,13 +97,11 @@ class SocketManager {
   private init() {
     if (this.socket) return;
 
-    const token = storage.getString("token");
-
     this.socket = io(Config.BASE_URL!, {
       transports: ["websocket"],
       autoConnect: false,
       auth: {
-        token,
+        token: this.authToken,
       },
     });
 
@@ -105,12 +112,13 @@ class SocketManager {
    * AUTH
    * ==================================================== */
   updateAuthToken(token: string | null) {
+    this.authToken = token;
+
     this.init();
     if (!this.socket) return;
 
     this.socket.auth = { token };
 
-    // reconnect cleanly
     if (this.socket.connected) {
       this.socket.disconnect();
     }
@@ -137,9 +145,11 @@ class SocketManager {
 
   disconnect() {
     if (!this.socket) return;
-    if (!this.socket.connected) return;
 
     this.socket.disconnect();
+
+    this.status = "disconnected";
+    this.notify();
   }
 
   /* ======================================================
@@ -151,6 +161,8 @@ class SocketManager {
     this.socket.on("connect", () => {
       this.status = "connected";
       this.notify();
+
+      this.onConnectListeners.forEach((cb) => cb(this.socket!));
     });
 
     this.socket.on("disconnect", (reason) => {

@@ -1,4 +1,8 @@
-import { onGetGPSPerDeviceService, onGetGPSService } from "@/services/gps";
+import {
+  onGetGPSPerDeviceService,
+  onGetGPSService,
+  onGetMapGroupService,
+} from "@/services/gps";
 import { moveCurrentUserFirst } from "@/utils/helpers";
 import { storage } from "@/utils/storage";
 import { useCallback, useState } from "react";
@@ -10,6 +14,9 @@ const useHandleLocation = () => {
   const actions = {
     onGetGPS: useCallback(() => {
       onHandleGetGPS();
+    }, []),
+    onGetGroupGPS: useCallback((activity_id: string) => {
+      onHandleGetGroupGPS(activity_id);
     }, []),
     onGetPerDeviceGPS: useCallback((val: string) => {
       onHandleGetPerDeviceGPS(val);
@@ -24,6 +31,20 @@ const useHandleLocation = () => {
       const currentUser = storage.getString("user.username");
       const res = await onGetGPSService();
       const data = moveCurrentUserFirst(res, currentUser ?? "");
+      setListGPS(data);
+    } catch (err) {
+      if (__DEV__) {
+        console.log(err);
+      }
+    }
+  }
+  async function onHandleGetGroupGPS(activity_id: string) {
+    try {
+      const currentUser = storage.getString("user.username");
+      const res = await onGetMapGroupService(activity_id);
+      // console.log(res.length);
+      const data = moveCurrentUserFirst(res, currentUser ?? "");
+      // console.log(data.length);
       setListGPS(data);
     } catch (err) {
       if (__DEV__) {

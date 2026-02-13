@@ -9,7 +9,7 @@ export type SocketStatus =
   | "error";
 
 /* =======================
-   CALL STATES
+   CALL STATES (DOMAIN)
 ======================= */
 export type CallState =
   | "INITIATED"
@@ -20,6 +20,9 @@ export type CallState =
   | "CANCELLED"
   | "ENDED";
 
+/* =======================
+   CALL STATES (UI)
+======================= */
 export type CallUIState =
   | "IDLE"
   | "OUTGOING"
@@ -27,6 +30,9 @@ export type CallUIState =
   | "CONNECTED"
   | "MISSED";
 
+/* =======================
+   WEBRTC SIGNALING TYPES
+======================= */
 export type WebRTCSessionDescription = {
   type: "offer" | "answer";
   sdp: string;
@@ -38,15 +44,11 @@ export type WebRTCIceCandidate = {
   sdpMLineIndex?: number;
 };
 
-export type RTCPeerConnectionWithEvents = RTCPeerConnection & {
-  onicecandidate?: (event: any) => void;
-  onaddstream?: (event: any) => void;
-};
-
 /* =======================
    PAYLOADS
 ======================= */
-// CHAT
+
+/* ---------- CHAT ---------- */
 export interface JoinRoomPayload {
   conversationId: string;
 }
@@ -59,78 +61,113 @@ export interface SendMessagePayload {
   createdAt: number;
 }
 
-// CALL
+/* ---------- CALL (GENERIC) ---------- */
 export interface IncomingCallPayload {
   roomId: string;
   fromUserId: number;
   toUserId: number;
 }
 
-export type OfferPayload = {
+/* ---------- WEBRTC ---------- */
+export interface OfferPayload {
   roomId: string;
   sdp: WebRTCSessionDescription;
-};
+}
 
-export type AnswerPayload = {
+export interface AnswerPayload {
   roomId: string;
   sdp: WebRTCSessionDescription;
-};
+}
 
-export type IceCandidatePayload = {
+export interface IceCandidatePayload {
   roomId: string;
   candidate: WebRTCIceCandidate;
+}
+
+/* =======================
+   MEDIASOUP PAYLOADS
+======================= */
+
+export type JoinCallPayload = {
+  roomId: string;
 };
 
-/* ========= CLIENT → SERVER ========= */
+export type CreateTransportPayload = {
+  roomId: string;
+};
+
+export type ConnectTransportPayload = {
+  transportId: string;
+  dtlsParameters: any;
+};
+
+export type ProducePayload = {
+  transportId: string;
+  kind: "audio" | "video";
+  rtpParameters: any;
+};
+
+export type ConsumePayload = {
+  transportId: string | null | undefined;
+  producerId: string;
+  rtpCapabilities: any;
+};
+
+export type ExistingProducer = string;
+
+/* =======================
+   CLIENT → SERVER
+======================= */
 export interface StartCallPayload {
   roomId: string;
   targetUserId: number;
 }
+
 export interface CallActionPayload {
   roomId: string;
 }
+
 export interface RejectCallPayload {
   roomId: string;
   fromUserId: number;
 }
+
 export interface CancelCallPayload {
   roomId: string;
   targetUserId: number;
 }
 
-/* ========= SERVER → CLIENT ========= */
-export interface CallRejectedPayload {
-  roomId: string;
-  rejectedBy: number;
-}
+/* =======================
+   SERVER → CLIENT
+======================= */
 export interface CallAcceptedPayload {
   roomId: string;
   acceptedBy: number;
 }
+
+export interface CallRejectedPayload {
+  roomId: string;
+  rejectedBy: number;
+}
+
 export interface CallCanceledPayload {
   roomId: string;
   canceledBy: number;
 }
+
 export interface CallEndedPayload {
-  peerId: string;
+  roomId: string;
 }
-
-// export interface IceCandidatePayload {
-//   roomId: string;
-//   candidate: RTCIceCandidateInit;
-// }
-
-// export interface SdpPayload {
-//   roomId: string;
-//   sdp: RTCSessionDescriptionInit;
-// }
 
 /* =======================
    CLIENT → SERVER EVENTS
 ======================= */
 export interface ClientToServerEvents {
   // CHAT
-  join_room: (conversationId: string) => void;
+  join_room: (
+    conversationId: string,
+    cb: (rtpCapabilities: any) => void
+  ) => void;
   send_message: (payload: SendMessagePayload) => void;
 
   // CALL
@@ -139,11 +176,15 @@ export interface ClientToServerEvents {
   reject_call: (payload: RejectCallPayload) => void;
   cancel_call: (payload: CancelCallPayload) => void;
   call_reconnect: (payload: CallActionPayload) => void;
-  end_call: () => void;
+  end_call: (payload: CallEndedPayload) => void;
 
-  webrtc_offer: (payload: OfferPayload) => void;
-  webrtc_answer: (payload: AnswerPayload) => void;
-  ice_candidate: (payload: IceCandidatePayload) => void;
+  /* ===== MEDIASOUP ===== */
+  joinRoom: (roomId: string, cb: (rtpCaps: any) => void) => void;
+  createTransport: (cb: (params: any) => void) => void;
+  connect_transport: (payload: ConnectTransportPayload) => void;
+  produce: (payload: ProducePayload, cb: (res: { id: string }) => void) => void;
+  getProducers: (cb: (list: ExistingProducer[]) => void) => void;
+  consume: (payload: ConsumePayload, cb: (params: any) => void) => void;
 }
 
 /* =======================
@@ -160,7 +201,8 @@ export interface ServerToClientEvents {
   call_canceled: (payload: CallCanceledPayload) => void;
   call_ended: (payload: CallEndedPayload) => void;
 
-  webrtc_offer: (payload: OfferPayload) => void;
-  webrtc_answer: (payload: AnswerPayload) => void;
-  ice_candidate: (payload: IceCandidatePayload) => void;
+  // MEDIASOUP
+  getProducers: (list: ExistingProducer[]) => void;
+  newProducer: (payload: { producerId: string }) => void;
+  producer_closed: (payload: { producerId: string }) => void;
 }

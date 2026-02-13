@@ -24,7 +24,9 @@ export const VehicleItem: React.FC<VehicleItemProps> = ({
   highlight,
   onPress,
 }) => {
-  const currentUser = item.device_id === storage.getString("user.username");
+  const device_id = item?.popup.split(" ")[1];
+  const uname = storage.getString("user.username");
+  const currentUser = device_id === uname;
   const isSelected = selectedId === item.id;
 
   const animatedStyle = useAnimatedStyle(() => {
@@ -65,7 +67,7 @@ export const VehicleItem: React.FC<VehicleItemProps> = ({
         />
         <Gap width={14} />
         <View>
-          <Text style={[blackTextStyle, text.label]}>{item.device_id}</Text>
+          <Text style={[blackTextStyle, text.label]}>{device_id}</Text>
           {currentUser ? <Text style={[blueTextStyle]}>(You)</Text> : null}
         </View>
       </TouchableOpacity>

@@ -62,6 +62,8 @@ export function useLocationTracker(): UseLocationTrackerResult {
   const [error, setError] = useState<string | null>(null);
   const [bearing, setBearing] = useState(0);
 
+  // console.log("[KUDA]", selectedVehicle);
+
   // const screen = useWindowDimensions();
   // const ASPECT_RATIO = screen.width / screen.height;
   // const LATITUDE_DELTA = 0.001;
@@ -185,8 +187,8 @@ export function useLocationTracker(): UseLocationTrackerResult {
             return;
 
           // Validate coordinates
-          const lat = parseFloat(data.latitute);
-          const long = parseFloat(data.longitude);
+          const lat = parseFloat(data.lat);
+          const long = parseFloat(data.long);
 
           if (isNaN(lat) || isNaN(long)) {
             console.log("[onFocusVehicle] Invalid coordinates");
@@ -200,6 +202,7 @@ export function useLocationTracker(): UseLocationTrackerResult {
           currentAnimationId.current += 1;
 
           setSelectedVehicle(data);
+          console.log("[KUDA PILIHAN]", data);
 
           // Queue the camera animation with smoother transitions
           const queued = queueCameraAnimation(async () => {

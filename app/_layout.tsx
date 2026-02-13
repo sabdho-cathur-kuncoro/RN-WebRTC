@@ -6,21 +6,28 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { CallProvider } from "@/contexts/CallContext";
 import { useAuthStore } from "@/stores/auth.store";
 
+import { AudioSink } from "@/components/AudioSink";
 import { FloatingCallBar } from "@/components/FloatingCallBar";
 import GlobalLoading from "@/components/GlobalLoading";
 import { IncomingCallOverlay } from "@/components/IncomingCallOverlay";
 import AppToast from "@/components/Toast";
+import { MediasoupProvider } from "@/contexts/MediaSoupContext";
 import { socketManager } from "@/socket/SocketManager";
 
 function AuthBootstrap({ children }: { children: React.ReactNode }) {
-  const { isLoggedIn, token, isHydrated } = useAuthStore();
+  const { isLoggedIn, token, isHydrated, hydrate } = useAuthStore();
 
   useEffect(() => {
+    hydrate();
+  }, [hydrate]);
+
+  useEffect(() => {
+    console.log("[AUTH]", { isLoggedIn, token, isHydrated });
     if (!isHydrated) return;
 
     if (isLoggedIn && token) {
       socketManager.updateAuthToken(token);
-      socketManager.connect();
+      // socketManager.connect();
     } else {
       socketManager.disconnect();
     }
@@ -55,19 +62,22 @@ export default function RootLayout() {
   return (
     <AuthBootstrap>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <CallProvider>
-          <SafeAreaView style={{ flex: 1 }}>
-            <Slot />
+        <MediasoupProvider>
+          <CallProvider>
+            <SafeAreaView style={{ flex: 1 }}>
+              <Slot />
 
-            {DevManual ? React.createElement(DevManual) : null}
+              {DevManual ? React.createElement(DevManual) : null}
 
-            <AppToast />
-            <GlobalLoading />
-            <IncomingCallOverlay />
-            <FloatingCallBar />
-            {/* <CallDebugPanel /> */}
-          </SafeAreaView>
-        </CallProvider>
+              <AppToast />
+              <GlobalLoading />
+              <IncomingCallOverlay />
+              <FloatingCallBar />
+              <AudioSink />
+              {/* <CallDebugPanel /> */}
+            </SafeAreaView>
+          </CallProvider>
+        </MediasoupProvider>
       </GestureHandlerRootView>
     </AuthBootstrap>
   );

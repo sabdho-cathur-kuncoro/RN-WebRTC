@@ -18,36 +18,10 @@ import { formatDate, formatTime } from "@/utils/dayjs";
 import React, { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
-const dummy = [
-  {
-    id: 1,
-    nrp: "87021421",
-    name: "Sertu Rahmad Prakoso",
-    vehicle: "PM-201",
-  },
-  {
-    id: 2,
-    nrp: "91033288",
-    name: "Serda Dimas Arya Putra",
-    vehicle: "PM-202",
-  },
-  {
-    id: 3,
-    nrp: "90011852",
-    name: "Koptu Andika Wirawan",
-    vehicle: "PM-203",
-  },
-  {
-    id: 4,
-    nrp: "88044219",
-    name: "Kopda Yusuf Alamsyah",
-    vehicle: "PM-204",
-  },
-];
-
 const DetailOperation = () => {
   const operation = useOperationStore((s) => s.operation);
-  const [detailOps, setDetailOps] = useState<any>(null);
+  const [headerOps, setHeaderOps] = useState<any>(null);
+  const [detailOps, setDetailOps] = useState<any>([]);
 
   useEffect(() => {
     getDetailsOps();
@@ -58,11 +32,16 @@ const DetailOperation = () => {
     try {
       const res = await onGetDetailOperationsService(operation!.id);
       // console.log(res);
-      setDetailOps(res);
+      setHeaderOps(res?.hd_operation[0]);
+      setDetailOps(res?.dt_operation);
     } catch (err) {
+      if (__DEV__) {
+        console.log(err);
+      }
       // no op
     }
   }
+  // console.log(detailOps?.hd_activity);
   return (
     <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
       <FocusAwareStatusBar barStyle={"light-content"} />
@@ -70,7 +49,7 @@ const DetailOperation = () => {
         <View style={{ flexDirection: "row" }}>
           <View style={{ width: "70%" }}>
             <Text style={[whiteTextStyle, text.label]}>
-              {detailOps?.hd_activity?.activity_name ?? "-"}
+              {headerOps?.activity_name ?? "-"}
             </Text>
             <Gap height={10} />
             <Text style={[whiteTextStyle, text.regular]}>-</Text>
@@ -117,13 +96,13 @@ const DetailOperation = () => {
           <View style={{ width: "auto", marginRight: 10 }}>
             <Text style={[greyTextStyle, text.regular]}>Date</Text>
             <Text style={[whiteTextStyle, text.regular]}>
-              {formatDate(detailOps?.hd_activity.start_date)}
+              {formatDate(headerOps?.start_date)}
             </Text>
           </View>
           <View style={{ width: "auto", marginRight: 10 }}>
             <Text style={[greyTextStyle, text.regular]}>Time</Text>
             <Text style={[whiteTextStyle, text.regular]}>
-              {formatTime(detailOps?.hd_activity.start_date)}
+              {formatTime(headerOps?.start_date)}
             </Text>
           </View>
           <View style={{ width: "auto", marginRight: 10 }}>
@@ -152,7 +131,7 @@ const DetailOperation = () => {
           <Text
             style={[whiteTextStyle, text.regular, { textAlign: "justify" }]}
           >
-            {detailOps?.hd_activity?.description}
+            {headerOps?.description}
           </Text>
         </View>
       </View>
@@ -177,20 +156,20 @@ const DetailOperation = () => {
               <Text style={[whiteTextStyle]}>Vehicle</Text>
             </View>
           </View>
-          {dummy.map((data: any) => {
+          {detailOps.map((data: any, index: any) => {
             return (
               <View key={data.id} style={styles.listContent}>
                 <View style={[{ width: "15%" }, styles.center]}>
-                  <Text style={[whiteTextStyle]}>{data.id}</Text>
+                  <Text style={[whiteTextStyle]}>{index + 1}</Text>
                 </View>
                 <View style={[{ width: "20%" }]}>
                   <Text style={[whiteTextStyle]}>{data.nrp}</Text>
                 </View>
                 <View style={[{ width: "40%" }]}>
-                  <Text style={[whiteTextStyle]}>{data.name}</Text>
+                  <Text style={[whiteTextStyle]}>{data.driver}</Text>
                 </View>
                 <View style={[{ width: "15%" }]}>
-                  <Text style={[whiteTextStyle]}>{data.vehicle}</Text>
+                  <Text style={[whiteTextStyle]}>{data.unit_id}</Text>
                 </View>
               </View>
             );

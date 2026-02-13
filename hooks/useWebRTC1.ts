@@ -1,5 +1,5 @@
 // // hooks/useWebRTC.ts
-// import type {
+// import {
 //   WebRTCIceCandidate,
 //   WebRTCSessionDescription,
 // } from "@/socket/socketTypes";
@@ -12,21 +12,14 @@
 //   RTCSessionDescription,
 // } from "react-native-webrtc";
 
-// /* =======================
-//    PARAMS
-// ======================= */
 // type Params = {
 //   enabled: boolean;
 //   isMuted: boolean;
-
 //   onSendOffer: (sdp: WebRTCSessionDescription) => void;
 //   onSendAnswer: (sdp: WebRTCSessionDescription) => void;
 //   onSendIce: (candidate: WebRTCIceCandidate) => void;
 // };
 
-// /* =======================
-//    HOOK
-// ======================= */
 // export function useWebRTC({
 //   enabled,
 //   isMuted,
@@ -53,13 +46,12 @@
 //       iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
 //     });
 
-//     // RN typings incomplete → cast safely
-//     const pcAny = pc as unknown as {
+//     const pcWithEvents = pc as unknown as {
 //       onicecandidate?: (event: any) => void;
-//       ontrack?: (event: any) => void;
+//       onaddstream?: (event: any) => void;
 //     };
 
-//     pcAny.onicecandidate = (event) => {
+//     pcWithEvents.onicecandidate = (event) => {
 //       const c = event?.candidate;
 //       if (!c || !c.candidate) return;
 
@@ -70,15 +62,9 @@
 //       });
 //     };
 
-//     pcAny.ontrack = (event) => {
-//       if (event.streams?.[0]) {
-//         setRemoteStream(event.streams[0]);
-//       }
-//     };
-
 //     pcRef.current = pc;
 
-//     return cleanup;
+//     return () => cleanup();
 //     // eslint-disable-next-line react-hooks/exhaustive-deps
 //   }, [enabled]);
 
@@ -104,32 +90,31 @@
 //   }, []);
 
 //   /* =======================
-//      MUTE / UNMUTE
+//      MUTE
 //   ======================= */
 //   useEffect(() => {
 //     const stream = localStreamRef.current;
 //     if (!stream) return;
 
-//     stream.getAudioTracks().forEach((track) => {
-//       track.enabled = !isMuted;
+//     stream.getAudioTracks().forEach((t) => {
+//       t.enabled = !isMuted;
 //     });
 //   }, [isMuted]);
 
 //   /* =======================
-//      OFFER (CALLER)
+//      OFFER / ANSWER
 //   ======================= */
 //   const createOffer = useCallback(async () => {
 //     if (!pcRef.current) return;
-
 //     if (pcRef.current.signalingState !== "stable") {
 //       console.warn(
-//         "[WebRTC] Skip createOffer, signalingState:",
+//         "Skip createOffer, signalingState:",
 //         pcRef.current.signalingState
 //       );
 //       return;
 //     }
-
 //     if (offerCreatedRef.current) return;
+
 //     offerCreatedRef.current = true;
 
 //     await ensureLocalStream();
@@ -143,9 +128,6 @@
 //     });
 //   }, [ensureLocalStream, onSendOffer]);
 
-//   /* =======================
-//      HANDLE OFFER (CALLEE)
-//   ======================= */
 //   const handleOffer = useCallback(
 //     async (sdp: WebRTCSessionDescription) => {
 //       if (!pcRef.current) return;
@@ -165,9 +147,6 @@
 //     [ensureLocalStream, onSendAnswer]
 //   );
 
-//   /* =======================
-//      HANDLE ANSWER (CALLER)
-//   ======================= */
 //   const handleAnswer = useCallback(async (sdp: WebRTCSessionDescription) => {
 //     if (!pcRef.current) return;
 
@@ -179,7 +158,6 @@
 //   ======================= */
 //   const addIceCandidate = useCallback(async (c: WebRTCIceCandidate) => {
 //     if (!pcRef.current) return;
-
 //     await pcRef.current.addIceCandidate(new RTCIceCandidate(c));
 //   }, []);
 
@@ -198,17 +176,28 @@
 //     setRemoteStream(null);
 //   }, []);
 
-//   /* =======================
-//      PUBLIC API
-//   ======================= */
 //   return {
 //     remoteStream,
-
 //     createOffer,
 //     handleOffer,
 //     handleAnswer,
 //     addIceCandidate,
-
 //     cleanup,
 //   };
 // }
+
+// // const pcWithEvents = pc as unknown as {
+// //   onicecandidate?: (event: any) => void;
+// //   onaddstream?: (event: any) => void;
+// // };
+
+// // pcWithEvents.onicecandidate = (event) => {
+// //   const c = event?.candidate;
+// //   if (!c || !c.candidate) return;
+
+// //   onSendIce({
+// //     candidate: c.candidate,
+// //     sdpMid: c.sdpMid ?? undefined,
+// //     sdpMLineIndex: c.sdpMLineIndex ?? undefined,
+// //   });
+// // };

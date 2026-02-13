@@ -16,6 +16,7 @@ import {
   line,
   mainContent,
   navyColor,
+  redColor,
   shadow,
   strokeColor,
   whiteColor,
@@ -38,7 +39,7 @@ import {
   View,
 } from "react-native";
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
-import {
+import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -262,12 +263,36 @@ const Map = () => {
       <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
         <View style={styles.sidebarContainer}>
           <FlatList
-            data={DUMMY}
-            keyExtractor={(item: any) => item.device_id}
+            data={listGPS}
+            keyExtractor={(item: any) => item.popup}
             contentContainerStyle={{ paddingBottom: 80 }}
             renderItem={({ item, index }: any) => {
+              const device_id = item?.popup?.split(" ")[1];
+              const currentUser =
+                device_id === storage.getString("user.username");
+              const lat = currentUser
+                ? lastLocation?.coords.latitude
+                : parseFloat(item?.coords[0]);
+              const long = currentUser
+                ? lastLocation?.coords.longitude
+                : parseFloat(item?.coords[1]);
+              const dataSelected = {
+                device_id,
+                lat,
+                long,
+                id: item.id,
+                is_online: item.is_online,
+              };
               return (
-                <View style={styles.cardContainer}>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    if (!isUserInteracting) {
+                      actionsLocTracker.onFocusVehicle(dataSelected, index);
+                    }
+                  }}
+                  style={styles.cardContainer}
+                >
                   <View style={styles.row}>
                     <View
                       style={{
@@ -281,7 +306,7 @@ const Map = () => {
                         style={{ width: 40, height: 40, resizeMode: "cover" }}
                       />
                       <Gap width={20} />
-                      <Text style={[whiteTextStyle]}>{item.device_id}</Text>
+                      <Text style={[whiteTextStyle]}>{device_id}</Text>
                     </View>
                     <View
                       style={{
@@ -291,22 +316,37 @@ const Map = () => {
                         justifyContent: "flex-end",
                       }}
                     >
-                      <View style={styles.dotContainer} />
+                      <View
+                        style={[
+                          styles.dotContainer,
+                          {
+                            backgroundColor: item?.is_online
+                              ? greenColor
+                              : redColor,
+                          },
+                        ]}
+                      />
                       <Gap width={10} />
                       <Text style={[whiteTextStyle, { fontSize: 12 }]}>
-                        Online
+                        {item?.is_online ? "Online" : "Offline"}
                       </Text>
                     </View>
                   </View>
                   <View style={[line, { marginVertical: 20 }]} />
-                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <View
+                    style={{
+                      width: "90%",
+                      flexDirection: "row",
+                      alignItems: "center",
+                    }}
+                  >
                     <Ionicons name="location" color={greyColor} size={20} />
                     <Gap width={10} />
                     <Text style={[whiteTextStyle, { fontSize: 12 }]}>
-                      Lat: {item.lat} | Lng: {item.lng}
+                      Lat: {lat} | Lng: {long}
                     </Text>
                   </View>
-                </View>
+                </TouchableOpacity>
               );
             }}
           />
@@ -314,76 +354,108 @@ const Map = () => {
         <View style={{ width: "70%" }}>
           <View style={[styles.mapWrapper]}>
             {initialRegion ? (
-              <MapView
-                provider={PROVIDER_GOOGLE}
-                ref={mapRef}
-                customMapStyle={mapLightStyle}
-                style={[styles.map]}
-                initialRegion={initialRegion}
-                scrollEnabled={true}
-                rotateEnabled={true}
-                onMapReady={() => {
-                  setMapReadyState(true);
-                  setMapReady(true);
-                }}
-                onPress={() => {
-                  actionsLocTracker.onSetSelectedVehicle(null);
-                  handleMapInteractionEnd();
-                }}
-                onPanDrag={() => {
-                  actionsLocTracker.onSetSelectedVehicle(null);
-                  handleMapInteractionStart();
-                }}
-                onRegionChange={() => {
-                  handleMapInteractionStart();
-                }}
-                onRegionChangeComplete={() => {
-                  handleMapInteractionEnd();
-                }}
-              >
-                {listGPS.map((data: any, index: any) => {
-                  const currentUser =
-                    data.device_id === storage.getString("user.username");
-                  const lat = currentUser
-                    ? lastLocation?.coords.latitude
-                    : parseFloat(data?.latitute);
-                  const long = currentUser
-                    ? lastLocation?.coords.longitude
-                    : parseFloat(data?.longitude);
-                  return (
-                    <Marker
-                      key={data?.device_id}
-                      coordinate={{
-                        latitude: lat!,
-                        longitude: long!,
-                      }}
-                      flat
-                      anchor={{ x: 0.5, y: 1 }}
-                      onPress={() => {
-                        if (!isUserInteracting) {
-                          actionsLocTracker.onFocusVehicle(data, index);
-                        }
-                      }}
-                      style={{ width: 56, height: 56 }}
-                    >
-                      {/* <Animated.View style={animatedStyle}> */}
-                      <Image
-                        source={
-                          currentUser
-                            ? require("@/assets/images/vehicle-top-pov-user.png")
-                            : require("@/assets/images/vehicle-top-pov.png")
-                        }
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          resizeMode: "contain",
+              <>
+                <MapView
+                  provider={PROVIDER_GOOGLE}
+                  ref={mapRef}
+                  customMapStyle={mapLightStyle}
+                  style={[styles.map]}
+                  initialRegion={initialRegion}
+                  scrollEnabled={true}
+                  rotateEnabled={true}
+                  onMapReady={() => {
+                    setMapReadyState(true);
+                    setMapReady(true);
+                  }}
+                  onPress={() => {
+                    actionsLocTracker.onSetSelectedVehicle(null);
+                    handleMapInteractionEnd();
+                  }}
+                  onPanDrag={() => {
+                    actionsLocTracker.onSetSelectedVehicle(null);
+                    handleMapInteractionStart();
+                  }}
+                  onRegionChange={() => {
+                    handleMapInteractionStart();
+                  }}
+                  onRegionChangeComplete={() => {
+                    handleMapInteractionEnd();
+                  }}
+                >
+                  {listGPS.map((data: any, index: any) => {
+                    const device_id = data?.popup.split(" ")[1];
+                    const currentUser =
+                      device_id === storage.getString("user.username");
+                    const lat = currentUser
+                      ? lastLocation?.coords.latitude
+                      : parseFloat(data?.coords[0]);
+                    const long = currentUser
+                      ? lastLocation?.coords.longitude
+                      : parseFloat(data?.coords[1]);
+                    const dataSelected = {
+                      device_id,
+                      lat,
+                      long,
+                      id: data.id,
+                      is_online: data.is_online,
+                    };
+                    return (
+                      <Marker
+                        key={device_id}
+                        coordinate={{
+                          latitude: lat!,
+                          longitude: long!,
                         }}
-                      />
-                      {/* </Animated.View> */}
-                    </Marker>
-                  );
-                })}
-              </MapView>
+                        flat
+                        anchor={{ x: 0.5, y: 1 }}
+                        onPress={() => {
+                          if (!isUserInteracting) {
+                            actionsLocTracker.onFocusVehicle(
+                              dataSelected,
+                              index
+                            );
+                          }
+                        }}
+                        style={{ width: 56, height: 56 }}
+                      >
+                        {/* <Animated.View style={animatedStyle}> */}
+                        <Image
+                          source={
+                            currentUser
+                              ? require("@/assets/images/vehicle-top-pov-user.png")
+                              : require("@/assets/images/vehicle-top-pov.png")
+                          }
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            resizeMode: "contain",
+                          }}
+                        />
+                        {/* </Animated.View> */}
+                      </Marker>
+                    );
+                  })}
+                </MapView>
+                {selectedVehicle && (
+                  <Animated.View
+                    pointerEvents={"none"}
+                    style={[
+                      styles.infoBubble,
+                      bubbleAnimatedStyle,
+                      { top: height / 4.5 },
+                    ]}
+                  >
+                    <Text style={styles.title}>
+                      {selectedVehicle.device_id}
+                    </Text>
+
+                    <Text style={styles.subtitle}>
+                      {Math.round((selectedVehicle.speed ?? 0) * 3.6)} km/h
+                    </Text>
+                    <View style={styles.tail} />
+                  </Animated.View>
+                )}
+              </>
             ) : (
               <View style={[styles.center]}>
                 <Text style={[whiteTextStyle]}>
@@ -507,7 +579,7 @@ const styles = StyleSheet.create({
     width: "29%",
   },
   mapWrapper: {
-    flex: 1,
+    flex: 0.89,
     borderRadius: 10,
     position: "relative",
     overflow: "hidden",
@@ -534,7 +606,7 @@ const styles = StyleSheet.create({
   footer: {
     position: "absolute",
     width: "100%",
-    bottom: 0,
+    bottom: 100,
   },
   btnRefresh: {
     borderRadius: 5,
@@ -595,6 +667,38 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 12,
-    backgroundColor: greenColor,
+  },
+  infoBubble: {
+    position: "absolute",
+    alignSelf: "center",
+    backgroundColor: whiteColor,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+
+    shadowColor: blackColor,
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  title: {
+    fontWeight: "600",
+    fontSize: 14,
+    color: blackColor,
+  },
+  subtitle: {
+    marginTop: 4,
+    fontSize: 12,
+    color: "#666",
+  },
+  tail: {
+    position: "absolute",
+    bottom: -6,
+    left: "75%",
+    marginLeft: -6,
+    width: 12,
+    height: 12,
+    backgroundColor: whiteColor,
+    transform: [{ rotate: "45deg" }],
   },
 });

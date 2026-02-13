@@ -7,20 +7,44 @@ import {
   whiteTextStyle,
 } from "@/constants/theme";
 import { useCallContext } from "@/contexts/CallContext";
+import { useMediasoupContext } from "@/contexts/MediaSoupContext";
 import { useCallTimer } from "@/hooks/useCallTimer";
 import { formatDuration } from "@/utils/formatDuration";
+import { useEffect, useRef } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { MicToggleButton } from "../MicToggleButton";
 import { SpeakerToggleButton } from "../SpeakerToggleButton";
 
 export function FloatingCallBar() {
-  const { callState, endCurrentCall, calleeId, callerId, isMuted } =
+  const { callState, calleeId, callerId, isMuted, endCurrentCall } =
     useCallContext();
+  const { start, cleanup, setMuted, remoteAudioActive } = useMediasoupContext();
+  const startedCallRef = useRef(false);
 
   const isConnected = callState === "CONNECTED";
+  const peerId = callerId ?? calleeId;
 
   const seconds = useCallTimer(isConnected);
   const duration = formatDuration(seconds);
+
+  useEffect(() => {
+    if (callState === "CONNECTED" && peerId && !startedCallRef.current) {
+      console.log("[CALL] start mediasoup", peerId);
+      startedCallRef.current = true;
+      start(String(peerId));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [callState, peerId]);
+
+  useEffect(() => {
+    if (callState !== "CONNECTED") {
+      startedCallRef.current = false;
+    }
+  }, [callState]);
+
+  useEffect(() => {
+    setMuted(isMuted);
+  }, [isMuted, setMuted]);
 
   // if (callState !== "CONNECTED" && callState !== "OUTGOING") return null;
 
@@ -49,8 +73,6 @@ export function FloatingCallBar() {
     return null;
   }
 
-  const peerId = callerId ?? calleeId;
-
   return (
     <View style={styles.container}>
       <View>
@@ -65,6 +87,13 @@ export function FloatingCallBar() {
             User ID: {peerId}
           </Text>
         )}
+        {isConnected && (
+          <Text
+            style={{ color: remoteAudioActive ? "lime" : "red", fontSize: 12 }}
+          >
+            {remoteAudioActive ? "Audio active" : "No audio"}
+          </Text>
+        )}
       </View>
 
       <View style={styles.right}>
@@ -73,9 +102,14 @@ export function FloatingCallBar() {
         <Pressable
           style={[
             styles.endBtn,
-            { backgroundColor: callState === "MISSED" ? greyColor : redColor },
+            {
+              backgroundColor: callState === "MISSED" ? greyColor : redColor,
+            },
           ]}
-          onPress={endCurrentCall}
+          onPress={() => {
+            cleanup("end");
+            endCurrentCall();
+          }}
         >
           <Text style={[styles.endText, whiteTextStyle]}>
             {callState === "MISSED" ? "Close" : "End"}
