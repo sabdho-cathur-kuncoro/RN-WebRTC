@@ -9,7 +9,7 @@ import type {
   Transport,
 } from "mediasoup-client/types";
 import { useEffect, useRef, useState } from "react";
-import { NativeModules, Platform } from "react-native";
+import { Platform } from "react-native";
 import InCallManager from "react-native-incall-manager";
 import { mediaDevices, registerGlobals } from "react-native-webrtc";
 
@@ -45,10 +45,41 @@ export function useMediasoup() {
   // 🔊 audio level indicator (0–100)
   const [remoteAudioActive, setRemoteAudioActive] = useState(false);
   const audioActivityTimerRef = useRef<any>(null);
+  const audioOutputStreamRef = useRef<MediaStream | null>(null);
 
   /* =======================
      INTERNAL HELPERS
   ======================= */
+  function attachAudioToNative(stream: MediaStream) {
+    // penting: simpan reference global supaya tidak di-GC
+    (global as any).__mediasoupAudioStream = stream;
+  }
+
+  function forceAndroidMediaAudio() {
+    if (Platform.OS !== "android") return;
+    if (audioRouteStartedRef.current) return;
+
+    console.log("🛠 ANDROID AUDIO PREPARE (BEFORE getUserMedia)");
+    audioRouteStartedRef.current = true;
+
+    InCallManager.stop();
+    InCallManager.start({ media: "audio", auto: true });
+    InCallManager.setForceSpeakerphoneOn(true);
+    InCallManager.setSpeakerphoneOn(true);
+
+    // const { RNInCallManager } = NativeModules;
+
+    // // 🔥 KRUSIAL: JANGAN MODE CALL
+    // RNInCallManager?.setMode?.("normal");
+
+    // // 🔥 PAKSA MEDIA STREAM
+    // RNInCallManager?.setVolume?.(1.0, "call");
+
+    // 🔥 PAKSA SPEAKER
+    InCallManager.setSpeakerphoneOn(true);
+    InCallManager.setForceSpeakerphoneOn(true);
+  }
+
   async function getLocalAudioTrack() {
     if (localStreamRef.current) {
       return localStreamRef.current.getAudioTracks()[0];
@@ -210,6 +241,8 @@ export function useMediasoup() {
       });
 
       /* ---- 3. PRODUCE AUDIO ---- */
+      // SET ROUTING AUDIO TO MEDIA NOT CALL
+      forceAndroidMediaAudio();
       const audioTrack = await getLocalAudioTrack();
       audioProducerRef.current = await sendTransport.produce({
         track: audioTrack,
@@ -301,7 +334,6 @@ export function useMediasoup() {
     }
 
     const socket = socketManager.getSocket();
-
     if (!socket || !deviceRef.current || !recvTransportRef.current) {
       console.warn("[Mediasoup] consume skipped - not ready");
       return;
@@ -310,16 +342,15 @@ export function useMediasoup() {
     console.log("[Mediasoup] consume request", {
       transportId: recvTransportRef.current.id,
       producerId,
-      rtpCapabilities: deviceRef.current.rtpCapabilities,
     });
 
     const params = await new Promise<any>((resolve) => {
       socket.emit(
         "consume",
         {
-          transportId: recvTransportRef?.current?.id, // 🔥 WAJIB
-          producerId, // 🔥 WAJIB
-          rtpCapabilities: deviceRef.current!.rtpCapabilities, // 🔥 WAJIB
+          transportId: recvTransportRef.current!.id,
+          producerId,
+          rtpCapabilities: deviceRef.current!.rtpCapabilities,
         },
         resolve
       );
@@ -332,18 +363,16 @@ export function useMediasoup() {
 
     const consumer = await recvTransportRef.current.consume(params);
 
+    /* ======================================================
+     AUDIO GUARD — HANYA 1 AUDIO CONSUMER
+    ====================================================== */
     if (consumer.kind === "audio" && hasAudioConsumerRef.current) {
       console.log("[IGNORE] extra audio consumer", consumer.id);
-      consumer.close(); // aman KARENA BELUM attach ke stream
+      consumer.close();
       return;
     }
 
-    // 🔥 CEGAH MULTIPLE AUDIO
-    // if (consumer.kind === "audio" && consumersRef.current.size > 0) {
-    //   console.log("[SKIP] extra audio consumer", consumer.id);
-    //   consumer.close();
-    //   return;
-    // }
+    consumersRef.current.set(consumer.id, consumer);
 
     console.log("[AUDIO CONSUMER]", {
       id: consumer.id,
@@ -351,98 +380,242 @@ export function useMediasoup() {
       paused: consumer.paused,
     });
 
-    // simpan consumer
-    consumersRef.current.set(consumer.id, consumer);
+    if (consumer.kind !== "audio") {
+      return;
+    }
 
-    if (consumer.kind === "audio") {
-      console.log("[AUDIO CONSUMER]", consumer.id);
-      hasAudioConsumerRef.current = true;
+    hasAudioConsumerRef.current = true;
+    setHasRemoteAudio(true);
+
+    const track = consumer.track;
+
+    console.log("🔊 [REMOTE AUDIO TRACK]", {
+      enabled: track.enabled,
+      muted: track.muted,
+      readyState: track.readyState,
+    });
+
+    /* ======================================================
+     MEDIASTREAM AUDIO — REGISTER KE NATIVE
+    ====================================================== */
+    if (!audioOutputStreamRef.current) {
+      audioOutputStreamRef.current = new MediaStream();
+    }
+
+    const stream = audioOutputStreamRef.current;
+
+    // pastikan hanya 1 track audio
+    stream.getTracks().forEach((t) => stream.removeTrack(t));
+    stream.addTrack(track);
+
+    remoteStreamRef.current = stream;
+    attachAudioToNative(stream);
+
+    setRemoteStream(stream);
+    console.log("[AUDIO OUTPUT] stream attached");
+    // forceAndroidMediaAudio();
+    console.log("[ANDROID AUDIO] media mode already prepared");
+
+    /* ======================================================
+     TRACK LIFECYCLE
+    ====================================================== */
+    track.onmute = () => {
+      console.warn("🔇 remote audio muted");
+      setHasRemoteAudio(false);
+    };
+
+    track.onunmute = () => {
+      console.log("🔊 remote audio unmuted");
       setHasRemoteAudio(true);
+    };
 
-      const track = consumer.track;
+    /* ======================================================
+     AUDIO ROUTE — START SEKALI
+    ====================================================== */
+    // if (!audioRouteStartedRef.current) {
+    //   console.log("[AUDIO ROUTE] init");
 
-      console.log("🔊 [REMOTE AUDIO TRACK]", {
-        enabled: track.enabled,
-        muted: track.muted,
-        readyState: track.readyState,
-        settings: track.getSettings?.(),
-      });
+    //   InCallManager.stop();
+    //   InCallManager.start({
+    //     media: "audio",
+    //   });
 
-      // 🔥 buat stream BARU (jangan reuse)
-      const stream = new MediaStream();
-      stream.addTrack(track);
-      remoteStreamRef.current = stream;
+    //   audioRouteStartedRef.current = true;
+    // }
 
-      track.onmute = () => {
-        console.warn("🔇 remote audio muted");
-        setHasRemoteAudio(false);
-      };
+    /* ======================================================
+     ANDROID FORCE SPEAKER (SAFE)
+    ====================================================== */
+    // if (Platform.OS === "android") {
+    //   setTimeout(() => {
+    //     InCallManager.setForceSpeakerphoneOn(true);
+    //     InCallManager.setSpeakerphoneOn(true);
+    //     InCallManager.setMicrophoneMute(false);
+    //   }, 400);
+    // }
 
-      track.onunmute = () => {
-        console.log("🔊 remote audio unmuted");
-        setHasRemoteAudio(true);
-      };
+    /* ======================================================
+     ACTIVITY PROBE (DEBUG ONLY)
+    ====================================================== */
+    if (!audioActivityTimerRef.current) {
+      audioActivityTimerRef.current = setInterval(() => {
+        const active =
+          track.readyState === "live" &&
+          track.enabled === true &&
+          track.muted === false;
 
-      // 🔥 start audio route SEKALI SAJA
-      if (!audioRouteStartedRef.current) {
-        console.log("[AUDIO ROUTE] init");
+        setRemoteAudioActive(active);
 
-        // InCallManager.start({
-        //   media: "audio",
-        //   ringback: "",
-        // });
-
-        InCallManager.setForceSpeakerphoneOn(true);
-        InCallManager.setSpeakerphoneOn(true);
-        InCallManager.setMicrophoneMute(false);
-
-        audioRouteStartedRef.current = true;
-      }
-
-      // setRemoteStream(stream);
-      setTimeout(() => {
-        setRemoteStream(stream);
-        console.log("[AUDIO OUTPUT] stream attached (delayed)");
-      }, 200);
-
-      console.log("[AUDIO OUTPUT] stream attached");
-
-      if (Platform.OS === "android") {
-        setTimeout(() => {
-          console.log("🛠 ANDROID TABLET AUDIO FIX");
-
-          const { RNInCallManager } = NativeModules;
-
-          // 🔥 JANGAN COMMUNICATION MODE
-          RNInCallManager?.setMode?.("normal");
-
-          // 🔥 PAKSA SPEAKER
-          InCallManager.setForceSpeakerphoneOn(true);
-          InCallManager.setSpeakerphoneOn(true);
-
-          // 🔥 PAKSA STREAM MUSIC (INI PALING PENTING)
-          RNInCallManager?.setVolume?.(1.0, "music");
-        }, 500);
-      }
-
-      // 🔥 RTP AUDIO LEVEL POLLING (ANDROID)
-      // 🔥 ACTIVITY PROBE (ANDROID SAFE)
-      if (!audioActivityTimerRef.current) {
-        audioActivityTimerRef.current = setInterval(() => {
-          if (
-            track.readyState === "live" &&
-            track.enabled === true &&
-            track.muted === false
-          ) {
-            setRemoteAudioActive(true);
-            console.log("📢 [REMOTE AUDIO] active");
-          } else {
-            setRemoteAudioActive(false);
-          }
-        }, 500);
-      }
+        if (active) {
+          console.log("📢 [REMOTE AUDIO] active");
+        }
+      }, 600);
     }
   }
+
+  // async function consume(producerId: string) {
+  //   if (!producerId) {
+  //     console.warn("[consume skipped] invalid producerId");
+  //     return;
+  //   }
+
+  //   if (!startedRef.current) {
+  //     console.log("[consume skipped] mediasoup not started");
+  //     return;
+  //   }
+
+  //   const socket = socketManager.getSocket();
+
+  //   if (!socket || !deviceRef.current || !recvTransportRef.current) {
+  //     console.warn("[Mediasoup] consume skipped - not ready");
+  //     return;
+  //   }
+
+  //   console.log("[Mediasoup] consume request", {
+  //     transportId: recvTransportRef.current.id,
+  //     producerId,
+  //     rtpCapabilities: deviceRef.current.rtpCapabilities,
+  //   });
+
+  //   const params = await new Promise<any>((resolve) => {
+  //     socket.emit(
+  //       "consume",
+  //       {
+  //         transportId: recvTransportRef?.current?.id, // 🔥 WAJIB
+  //         producerId, // 🔥 WAJIB
+  //         rtpCapabilities: deviceRef.current!.rtpCapabilities, // 🔥 WAJIB
+  //       },
+  //       resolve
+  //     );
+  //   });
+
+  //   if (!params) {
+  //     console.warn("[Mediasoup] consume params empty");
+  //     return;
+  //   }
+
+  //   const consumer = await recvTransportRef.current.consume(params);
+
+  //   if (consumer.kind === "audio" && hasAudioConsumerRef.current) {
+  //     console.log("[IGNORE] extra audio consumer", consumer.id);
+  //     consumer.close(); // aman KARENA BELUM attach ke stream
+  //     return;
+  //   }
+
+  //   // 🔥 CEGAH MULTIPLE AUDIO
+  //   // if (consumer.kind === "audio" && consumersRef.current.size > 0) {
+  //   //   console.log("[SKIP] extra audio consumer", consumer.id);
+  //   //   consumer.close();
+  //   //   return;
+  //   // }
+
+  //   console.log("[AUDIO CONSUMER]", {
+  //     id: consumer.id,
+  //     kind: consumer.kind,
+  //     paused: consumer.paused,
+  //   });
+
+  //   // simpan consumer
+  //   consumersRef.current.set(consumer.id, consumer);
+
+  //   if (consumer.kind === "audio") {
+  //     console.log("[AUDIO CONSUMER]", consumer.id);
+  //     hasAudioConsumerRef.current = true;
+  //     setHasRemoteAudio(true);
+
+  //     const track = consumer.track;
+
+  //     console.log("🔊 [REMOTE AUDIO TRACK]", {
+  //       enabled: track.enabled,
+  //       muted: track.muted,
+  //       readyState: track.readyState,
+  //       settings: track.getSettings?.(),
+  //     });
+
+  //     // 🔥 buat stream BARU (jangan reuse)
+  //     const stream = new MediaStream();
+  //     stream.addTrack(track);
+  //     remoteStreamRef.current = stream;
+
+  //     track.onmute = () => {
+  //       console.warn("🔇 remote audio muted");
+  //       setHasRemoteAudio(false);
+  //     };
+
+  //     track.onunmute = () => {
+  //       console.log("🔊 remote audio unmuted");
+  //       setHasRemoteAudio(true);
+  //     };
+
+  //     // 🔥 start audio route SEKALI SAJA
+  //     if (!audioRouteStartedRef.current) {
+  //       console.log("[AUDIO ROUTE] init");
+
+  //       InCallManager.stop();
+  //       InCallManager.start({
+  //         media: "audio",
+  //         ringback: "",
+  //         auto: true,
+  //       });
+
+  //       audioRouteStartedRef.current = true;
+  //     }
+
+  //     // setRemoteStream(stream);
+  //     setTimeout(() => {
+  //       setRemoteStream(stream);
+  //       console.log("[AUDIO OUTPUT] stream attached (delayed)");
+  //     }, 200);
+
+  //     console.log("[AUDIO OUTPUT] stream attached");
+
+  //     if (Platform.OS === "android") {
+  //       setTimeout(() => {
+  //         // 🔥 PAKSA SPEAKER
+  //         InCallManager.setForceSpeakerphoneOn(true);
+  //         InCallManager.setSpeakerphoneOn(true);
+  //         InCallManager.setMicrophoneMute(false);
+  //       }, 500);
+  //     }
+
+  //     // 🔥 RTP AUDIO LEVEL POLLING (ANDROID)
+  //     // 🔥 ACTIVITY PROBE (ANDROID SAFE)
+  //     if (!audioActivityTimerRef.current) {
+  //       audioActivityTimerRef.current = setInterval(() => {
+  //         if (
+  //           track.readyState === "live" &&
+  //           track.enabled === true &&
+  //           track.muted === false
+  //         ) {
+  //           setRemoteAudioActive(true);
+  //           console.log("📢 [REMOTE AUDIO] active");
+  //         } else {
+  //           setRemoteAudioActive(false);
+  //         }
+  //       }, 500);
+  //     }
+  //   }
+  // }
 
   /* =======================
      MUTE
@@ -501,7 +674,9 @@ export function useMediasoup() {
 
     deviceRef.current = null;
     startedRoomRef.current = null;
-    audioRouteStartedRef.current = false;
+    setTimeout(() => {
+      audioRouteStartedRef.current = false;
+    }, 300);
 
     // --- AUDIO ROUTE (ONCE) ---
     InCallManager.setForceSpeakerphoneOn(false);
