@@ -15,6 +15,7 @@ type VehicleItemProps = {
   index: number;
   selectedId: number | null;
   highlight: any;
+  isOperation: boolean;
   onPress: () => void;
 };
 
@@ -22,9 +23,10 @@ export const VehicleItem: React.FC<VehicleItemProps> = ({
   item,
   selectedId,
   highlight,
+  isOperation = false,
   onPress,
 }) => {
-  const device_id = item?.popup.split(" ")[1];
+  const device_id = isOperation ? item?.unit_id : item?.popup.split(" ")[1];
   const uname = storage.getString("user.username");
   const currentUser = device_id === uname;
   const isSelected = selectedId === item.id;

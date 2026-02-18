@@ -1,9 +1,5 @@
 import { APIBEARER } from "@/constants/API";
-
-type gpsDevice = {
-  device_id: string;
-  latlon: string;
-};
+import { gpsDevice, gpsGroup } from "@/type/operation.type";
 
 export async function onGetGPSService() {
   try {
@@ -19,15 +15,17 @@ export async function onGetGPSService() {
     }
   }
 }
-export async function onGetMapGroupService(activity_id: string) {
+export async function onGetMapGroupService(activity_id: string): gpsGroup {
   try {
     const res = await APIBEARER.get(`mobile/getMapGroups/${activity_id}`);
     const status = res.status;
-    const data = res.data;
+    const tempData = res.data;
+    const data = tempData.data;
+    const startingPosition = tempData.starting_position;
     // console.log(data.data);
     // console.log(data.data.length);
     if (status === 200) {
-      return data?.data;
+      return { data, startingPosition };
     }
   } catch (err: any) {
     if (__DEV__) {

@@ -10,6 +10,7 @@ import { useCallback, useState } from "react";
 const useHandleLocation = () => {
   const [listGPS, setListGPS] = useState<any[]>([]);
   const [perDeviceGPS, setPerDeviceGPS] = useState(null);
+  const [startingPosition, setStartingPosition] = useState([]);
 
   const actions = {
     onGetGPS: useCallback(() => {
@@ -41,11 +42,14 @@ const useHandleLocation = () => {
   async function onHandleGetGroupGPS(activity_id: string) {
     try {
       const currentUser = storage.getString("user.username");
-      const res = await onGetMapGroupService(activity_id);
+      const { data, startingPosition }: any = await onGetMapGroupService(
+        activity_id
+      );
       // console.log(res.length);
-      const data = moveCurrentUserFirst(res, currentUser ?? "");
+      const dataMarker = moveCurrentUserFirst(data, currentUser ?? "");
       // console.log(data.length);
-      setListGPS(data);
+      setListGPS(dataMarker);
+      setStartingPosition(startingPosition ?? []);
     } catch (err) {
       if (__DEV__) {
         console.log(err);
@@ -71,7 +75,7 @@ const useHandleLocation = () => {
       }
     }
   }
-  return { listGPS, perDeviceGPS, actions };
+  return { listGPS, perDeviceGPS, startingPosition, actions };
 };
 
 export default useHandleLocation;

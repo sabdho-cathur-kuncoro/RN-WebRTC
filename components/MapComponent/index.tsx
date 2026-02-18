@@ -39,7 +39,7 @@ import Gap from "../Gap";
 import { VehicleItem } from "../VehicleItem";
 import { mapLightStyle } from "./map.style";
 
-const MapComponent = () => {
+const MapComponent = ({ isOperation = false }) => {
   const {
     mapRef,
     listRef,
@@ -58,7 +58,7 @@ const MapComponent = () => {
     setMapReady,
   } = useLocationTracker();
   const operation = useOperationStore((s) => s.operation);
-  const { listGPS, actions } = useHandleLocation();
+  const { listGPS, startingPosition, actions } = useHandleLocation();
 
   const [mapReady, setMapReadyState] = useState(false);
   const [initialCameraSet, setInitialCameraSet] = useState(false);
@@ -161,6 +161,9 @@ const MapComponent = () => {
     setInitialCameraSet(true);
   }, [initialCameraSet, mapReady, initialRegion, actionsLocTracker]);
 
+  const startingLat = Number(startingPosition[0]);
+  const startingLng = Number(startingPosition[1]);
+
   if (isLoading) {
     return (
       <View style={[mainContent, styles.center]}>
@@ -222,7 +225,9 @@ const MapComponent = () => {
           }}
         >
           {listGPS.map((data: any, index: any) => {
-            const device_id = data?.popup.split(" ")[1];
+            const device_id = isOperation
+              ? data?.unit_id
+              : data?.popup.split(" ")[1];
             const currentUser =
               device_id === storage.getString("user.username");
             const lat = currentUser
@@ -271,6 +276,25 @@ const MapComponent = () => {
               </Marker>
             );
           })}
+          {isOperation &&
+            Number.isFinite(startingLat) &&
+            Number.isFinite(startingLng) && (
+              <Marker
+                coordinate={{ latitude: startingLat, longitude: startingLng }}
+              />
+            )}
+          {isOperation ? (
+            <>
+              {startingPosition.length > 0 ? (
+                <Marker
+                  coordinate={{
+                    latitude: parseFloat(startingPosition[0]),
+                    longitude: parseFloat(startingPosition[1]),
+                  }}
+                ></Marker>
+              ) : null}
+            </>
+          ) : null}
         </MapView>
         {selectedVehicle && (
           <Animated.View
@@ -373,7 +397,9 @@ const MapComponent = () => {
             data={listGPS}
             keyExtractor={(item: any) => item.unit_id}
             renderItem={({ item, index }: any) => {
-              const device_id = item?.popup.split(" ")[1];
+              const device_id = isOperation
+                ? item?.unit_id
+                : item?.popup.split(" ")[1];
               const currentUser =
                 device_id === storage.getString("user.username");
               const lat = currentUser
@@ -395,6 +421,7 @@ const MapComponent = () => {
                   index={index}
                   selectedId={selectedId}
                   highlight={highlight}
+                  isOperation={isOperation}
                   onPress={() =>
                     actionsLocTracker.onFocusVehicle(dataSelected, index)
                   }
