@@ -1,14 +1,8 @@
 // hooks/useMediasoup.ts
 import { socketManager } from "@/socket/SocketManager";
-import { ExistingProducer } from "@/socket/socketTypes";
 import { prepareAndroidAudio } from "@/utils/audioRoute";
 import * as mediasoupClient from "mediasoup-client";
-import type {
-  Consumer,
-  Device,
-  Producer,
-  Transport,
-} from "mediasoup-client/lib/types";
+import { Consumer, Device, Producer, Transport } from "mediasoup-client/types";
 import { useEffect, useRef, useState } from "react";
 import { NativeModules, Platform } from "react-native";
 // import InCallManager from "react-native-incall-manager";
@@ -46,6 +40,7 @@ export function useMediasoup() {
   // 🔊 audio level indicator (0–100)
   const [remoteAudioActive, setRemoteAudioActive] = useState(false);
   const audioActivityTimerRef = useRef<any>(null);
+  const bitrateIntervalRef = useRef<any>(null);
 
   /* =======================
      INTERNAL HELPERS
@@ -124,181 +119,113 @@ export function useMediasoup() {
      START MEDIASOUP (CALLER / CALLEE)
   ======================= */
   async function start(roomId: string) {
-    try {
-      if (startingRef.current) {
-        console.log("[MEDIASOUP] start already in progress");
-        return;
-      }
+    if (startingRef.current) {
+      console.log("[MEDIASOUP] start already running");
+      return;
+    }
 
-      startingRef.current = true;
+    startingRef.current = true;
+
+    try {
       const socket = socketManager.getSocket();
-      if (!socket) {
-        console.warn("[MediaSoup] socket not initialized yet");
-        return null;
-      }
-      if (startedRoomRef.current === roomId) {
-        console.warn("[MediaSoup] already started for room", roomId);
-        return;
-      }
-      if (startedRef.current) {
-        console.log("[MediaSoup] already started");
-        return;
-      }
-      if (sendTransportRef.current || recvTransportRef.current) {
-        console.log("[MEDIASOUP START SKIPPED] transport exists");
-        return;
-      }
+      if (!socket) throw new Error("socket not ready");
 
       console.log("[MEDIASOUP START] init transports");
 
-      /* ---- 1. join room & load device ---- */
+      /* =========================
+       1. JOIN ROOM
+    ========================== */
       const routerRtpCapabilities = await joinRoom(roomId);
       if (!routerRtpCapabilities) return;
-      startedRoomRef.current = roomId;
-      startedRef.current = true;
-
-      console.log("RTCPeerConnection exists:", !!global.RTCPeerConnection);
 
       const device = getDevice();
       await device.load({ routerRtpCapabilities });
-
-      console.log("[Mediasoup] Device loaded", {
-        canProduceAudio: device.canProduce("audio"),
-        rtpCapabilities: device.rtpCapabilities,
-      });
       deviceRef.current = device;
-      console.log("[START] after device.load");
 
-      /* ---- 2. SEND TRANSPORT ---- */
-      console.log("[START] before createTransport send");
-      const sendParams = await new Promise<any>((resolve, reject) => {
-        console.log("[START] emit createTransport (send)");
-        socket.emit("createTransport", (res) => {
-          if (!res) return reject(new Error("no send transport response"));
-          resolve(res);
-        });
-      });
-      console.log("[START] after sendTransport params");
+      /* =========================
+       2. SEND TRANSPORT
+    ========================== */
+      const sendParams = await new Promise<any>((res) =>
+        socket.emit("createTransport", res)
+      );
 
       const sendTransport = device.createSendTransport(sendParams);
       sendTransportRef.current = sendTransport;
 
-      console.log("[Mediasoup] sendTransport created", sendTransport.id);
-
       sendTransport.on("connect", ({ dtlsParameters }, cb) => {
-        console.log("[Mediasoup] sendTransport connect");
-        socket?.emit("connect_transport", {
+        socket.emit("connectTransport", {
           transportId: sendTransport.id,
           dtlsParameters,
         });
         cb();
       });
-      // Monitoring status: connecting, connected, failed, closed
-      // Digunakan untuk debug network
-      sendTransport.on("connectionstatechange", (state) => {
-        console.log("🔥 sendTransport state:", state);
-
-        if (state === "failed" || state === "disconnected") {
-          console.warn("[MEDIASOUP] sendTransport failed");
-
-          // 🔥 cleanup INTERNAL, BUKAN end call
-          cleanup("error");
-        }
-      });
 
       sendTransport.on("produce", ({ kind, rtpParameters }, cb) => {
-        console.log("[Mediasoup] produce", kind);
-        socket?.emit(
+        socket.emit(
           "produce",
-          {
-            transportId: sendTransport.id,
-            kind,
-            rtpParameters,
-          },
-          ({ id }) => {
-            console.log("[Mediasoup] producer created", id);
-            cb({ id });
-          }
+          { transportId: sendTransport.id, kind, rtpParameters },
+          ({ id }) => cb({ id })
         );
       });
 
-      /* ---- 3. PRODUCE AUDIO ---- */
-      // SET ROUTING AUDIO TO MEDIA NOT CALL
-      // forceAndroidMediaAudio();
-      // NativeModules.AudioRoute.prepareMediaAudio();
+      /* =========================
+       3. PRODUCE AUDIO
+    ========================== */
       prepareAndroidAudio();
 
       const audioTrack = await getLocalAudioTrack();
       audioProducerRef.current = await sendTransport.produce({
         track: audioTrack,
       });
-      console.log(
-        "[Mediasoup] audio producer started",
-        audioProducerRef.current.id
-      );
-      console.log("[AUDIO PRODUCER]", {
-        id: audioProducerRef.current.id,
-        paused: audioProducerRef.current.paused,
-        kind: audioProducerRef.current.kind,
-      });
 
-      /* ---- 4. RECV TRANSPORT ---- */
-      console.log("[START] request createTransport (recv)");
-      const recvParams = await new Promise<any>((resolve) => {
-        socket?.emit("createTransport", (res) => {
-          console.log("[START] createTransport (recv) response", res);
-          resolve(res);
-        });
-      });
-      console.log("[START] after recvTransport params");
+      console.log("[AUDIO PRODUCER]", audioProducerRef.current.id);
+
+      /* =========================
+        4. RECV TRANSPORT
+      ========================== */
+      const recvParams = await new Promise<any>((res) =>
+        socket.emit("createTransport", res)
+      );
 
       const recvTransport = device.createRecvTransport(recvParams);
       recvTransportRef.current = recvTransport;
 
-      console.log("[Mediasoup] recvTransport created", recvTransport.id);
-
       recvTransport.on("connect", ({ dtlsParameters }, cb) => {
-        socket?.emit("connect_transport", {
+        socket.emit("connectTransport", {
           transportId: recvTransport.id,
           dtlsParameters,
         });
         cb();
       });
-      // Monitoring koneksi: connecting → connected → failed
-      // 📌 Sangat berguna untuk debug ICE / network
+
       recvTransport.on("connectionstatechange", (state) => {
-        console.log("🔥 recvTransport state:", state);
+        console.log("🔥 recvTransport:", state);
       });
 
-      /* ---- 5. EXISTING PRODUCERS ---- */
-      socket.off("getProducers");
-      socket.off("newProducer");
-
-      console.log("[Mediasoup] request existing producers");
-      const existingProducers = await new Promise<ExistingProducer[]>(
-        (resolve) => {
-          socket.emit("getProducers", resolve);
-        }
+      /* =========================
+       5. EXISTING PRODUCERS
+    ========================== */
+      const producerIds = await new Promise<string[]>((res) =>
+        socket.emit("getProducers", res)
       );
 
-      console.log("[Mediasoup] existing producers", existingProducers);
+      console.log("[EXISTING PRODUCERS]", producerIds);
 
-      // for (const producerId of existingProducers) {
-      //   await consume(producerId);
-      // }
-      const audioProducerId = existingProducers[0];
-      await consume(audioProducerId);
-      // const audioProducer = existingProducers.find((p) => p.kind === "audio");
-      // if (audioProducer) {
-      //   await consume(audioProducer.id);
-      // }
+      for (const id of producerIds) {
+        await consume(id);
+      }
 
-      // socket.on("newProducer", async ({ producerId }) => {
-      //   console.log("[Mediasoup] new producer", producerId);
-      //   await consume(producerId);
-      // });
+      /* =========================
+       6. BARU SET STARTED
+       (INI KUNCI UTAMA)
+    ========================== */
+      startedRef.current = true;
+      startedRoomRef.current = roomId;
+
+      console.log("✅ mediasoup fully started");
     } catch (err) {
-      console.log("[Mediasoup start error]", err);
+      console.error("[MEDIASOUP start error]", err);
+      cleanup("error");
     } finally {
       startingRef.current = false;
     }
@@ -308,123 +235,113 @@ export function useMediasoup() {
      CONSUME
   ======================= */
   async function consume(producerId: string) {
-    if (!producerId) {
-      console.warn("[consume skipped] invalid producerId");
-      return;
-    }
+    if (!producerId) return;
+    if (!recvTransportRef.current || !deviceRef.current) return;
 
-    if (!startedRef.current) {
-      console.log("[consume skipped] mediasoup not started");
+    // 🔥 HANYA SATU AUDIO
+    if (hasAudioConsumerRef.current) {
+      console.log("[IGNORE] extra audio producer", producerId);
       return;
     }
 
     const socket = socketManager.getSocket();
-    if (!socket || !deviceRef.current || !recvTransportRef.current) {
-      console.warn("[Mediasoup] consume skipped - not ready");
-      return;
-    }
+    if (!socket) return;
 
-    console.log("[Mediasoup] consume request", {
-      transportId: recvTransportRef.current.id,
-      producerId,
-    });
+    console.log("[CONSUME]", producerId);
 
-    const params = await new Promise<any>((resolve) => {
+    const params = await new Promise<any>((resolve) =>
       socket.emit(
         "consume",
         {
           transportId: recvTransportRef.current!.id,
           producerId,
-          rtpCapabilities: deviceRef.current!.rtpCapabilities,
+          rtpCapabilities: deviceRef.current!.recvRtpCapabilities,
         },
         resolve
-      );
-    });
+      )
+    );
 
     if (!params) {
-      console.warn("[Mediasoup] consume params empty");
+      console.warn("[consume] empty params");
       return;
     }
 
     const consumer = await recvTransportRef.current.consume(params);
-
-    /* ======================================================
-     AUDIO GUARD — HANYA 1 AUDIO CONSUMER
-    ====================================================== */
-    if (consumer.kind === "audio" && hasAudioConsumerRef.current) {
-      console.log("[IGNORE] extra audio consumer", consumer.id);
-      consumer.close();
-      return;
-    }
-
-    consumersRef.current.set(consumer.id, consumer);
-
-    console.log("[AUDIO CONSUMER]", {
+    consumersRef.current.set(producerId, consumer);
+    console.log("[CONSUMER STATE]", {
       id: consumer.id,
       kind: consumer.kind,
       paused: consumer.paused,
+      trackReady: consumer.track.readyState,
+      trackEnabled: consumer.track.enabled,
+      trackMuted: consumer.track.muted,
     });
 
-    if (consumer.kind !== "audio") {
-      return;
-    }
+    console.log("[AUDIO CONSUMER]", {
+      id: consumer.id,
+      paused: consumer.paused,
+    });
+
+    if (consumer.kind !== "audio") return;
 
     hasAudioConsumerRef.current = true;
-    setHasRemoteAudio(true);
 
     const track = consumer.track;
 
-    console.log("🔊 [REMOTE AUDIO TRACK]", {
-      enabled: track.enabled,
-      muted: track.muted,
-      readyState: track.readyState,
-    });
+    // console.log("🔊 [REMOTE AUDIO TRACK]", {
+    //   enabled: track.enabled,
+    //   muted: track.muted,
+    //   readyState: track.readyState,
+    // });
 
-    /* ======================================================
-     MEDIASTREAM AUDIO — REGISTER KE NATIVE
-    ====================================================== */
+    /* =====================================================
+    MEDIASTREAM → RTCView
+    ===================================================== */
     const stream = new MediaStream();
     stream.addTrack(track);
 
     remoteStreamRef.current = stream;
-    setTimeout(() => {
-      remoteStreamRef.current = stream;
-      setRemoteStream(stream);
-      console.log("[AUDIO OUTPUT] stream attached (delayed)");
-    }, 100);
-    // forceAndroidMediaAudio();
-    console.log("[ANDROID AUDIO] media mode already prepared");
+    setRemoteStream(stream);
 
-    /* ======================================================
-     TRACK LIFECYCLE
-    ====================================================== */
-    track.onmute = () => {
-      console.warn("🔇 remote audio muted");
-      setHasRemoteAudio(false);
-    };
+    console.log("🔊 AudioSink stream", stream);
 
-    track.onunmute = () => {
-      console.log("🔊 remote audio unmuted");
-      setHasRemoteAudio(true);
-    };
+    /* =====================================================
+    DEBUG RTP (INI AKAN > 0 KBPS JIKA SUKSES)
+    ===================================================== */
+    // const pc =
+    //   (recvTransportRef.current as any)?._handler?._pc ??
+    //   (recvTransportRef.current as any)?._handler?._transport?._pc;
 
-    /* ======================================================
-     ACTIVITY PROBE (DEBUG ONLY)
-    ====================================================== */
-    if (!audioActivityTimerRef.current) {
-      audioActivityTimerRef.current = setInterval(() => {
-        const active =
-          track.readyState === "live" &&
-          track.enabled === true &&
-          track.muted === false;
+    // if (!pc) {
+    //   console.warn("[BITRATE] recv PC not found");
+    //   return;
+    // }
 
-        setRemoteAudioActive(active);
+    // setTimeout(async () => {
+    //   const stats = await pc.getStats();
 
-        if (active) {
-          console.log("📢 [REMOTE AUDIO] active");
-        }
-      }, 600);
-    }
+    //   const reports =
+    //     typeof stats.forEach === "function"
+    //       ? Array.from(stats.values())
+    //       : Array.isArray(stats)
+    //       ? stats
+    //       : Object.values(stats);
+
+    //   console.log(
+    //     "🧾 [STATS DUMP]",
+    //     reports.map((r) => ({
+    //       id: r.id,
+    //       type: r.type,
+    //       kind: r.kind,
+    //       mediaType: r.mediaType,
+    //       bytesReceived: r.bytesReceived,
+    //       packetsReceived: r.packetsReceived,
+    //       packetsLost: r.packetsLost,
+    //       jitter: r.jitter,
+    //       available: Object.keys(r),
+    //     }))
+    //   );
+    // }, 2000);
   }
 
   /* =======================
@@ -501,6 +418,11 @@ export function useMediasoup() {
       audioActivityTimerRef.current = null;
     }
     setRemoteAudioActive(false);
+
+    if (bitrateIntervalRef.current) {
+      clearInterval(bitrateIntervalRef.current);
+      bitrateIntervalRef.current = null;
+    }
 
     console.log("[CLEANUP DONE]");
   }

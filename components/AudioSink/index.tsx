@@ -6,7 +6,7 @@ export function AudioSink() {
   const { remoteStream } = useMediasoupContext();
 
   useEffect(() => {
-    console.log("🔊 AudioSink stream", remoteStream?.id);
+    console.log("🔊 COMPONENT AudioSink stream", remoteStream?.id);
   }, [remoteStream]);
 
   return (

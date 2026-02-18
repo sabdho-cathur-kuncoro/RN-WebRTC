@@ -181,7 +181,7 @@ export interface ClientToServerEvents {
   /* ===== MEDIASOUP ===== */
   joinRoom: (roomId: string, cb: (rtpCaps: any) => void) => void;
   createTransport: (cb: (params: any) => void) => void;
-  connect_transport: (payload: ConnectTransportPayload) => void;
+  connectTransport: (payload: ConnectTransportPayload) => void;
   produce: (payload: ProducePayload, cb: (res: { id: string }) => void) => void;
   getProducers: (cb: (list: ExistingProducer[]) => void) => void;
   consume: (payload: ConsumePayload, cb: (params: any) => void) => void;

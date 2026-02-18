@@ -15,6 +15,7 @@ import {
 import { CallUIState } from "@/socket/socketTypes";
 import { storage } from "@/utils/storage";
 import { useCallback, useEffect, useRef, useState } from "react";
+import InCallManager from "react-native-incall-manager";
 import { useCallPermissions } from "./useCallPermissions";
 
 const INCOMING_TIMEOUT_MS = 30_000;
@@ -138,9 +139,11 @@ export function useCall() {
       return;
     }
 
+    await mediasoup?.start(roomId);
     acceptCall({ roomId });
+    InCallManager.stopRingtone();
     // mediasoup.start() → dipicu dari call_accepted
-  }, [requestMicrophonePermission, roomId]);
+  }, [mediasoup, requestMicrophonePermission, roomId]);
 
   const rejectIncomingCall = useCallback(() => {
     if (callStateRef.current !== "INCOMING") return;
@@ -223,6 +226,7 @@ export function useCall() {
         setRoomId(payload.roomId);
         setCallerId(payload.fromUserId);
         setCallState("INCOMING");
+        // InCallManager.startRingtone("_BUNDLE_", 2, "", 10);
       }
     });
 
@@ -235,7 +239,7 @@ export function useCall() {
       callAcceptedOnceRef.current = true;
 
       setCallState("CONNECTED");
-      await mediasoup?.start(roomId);
+      // await mediasoup?.start(roomId);
     });
 
     const resetCallAccepted = () => {
@@ -255,6 +259,7 @@ export function useCall() {
       }
       resetUI();
       callAcceptedOnceRef.current = false;
+      InCallManager.stopRingtone();
     });
 
     const offCancelled = onCallCancelled(() => {

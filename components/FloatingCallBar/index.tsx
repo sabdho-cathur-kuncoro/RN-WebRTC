@@ -27,14 +27,14 @@ export function FloatingCallBar() {
   const seconds = useCallTimer(isConnected);
   const duration = formatDuration(seconds);
 
-  useEffect(() => {
-    if (callState === "CONNECTED" && peerId && !startedCallRef.current) {
-      console.log("[CALL] start mediasoup", peerId);
-      startedCallRef.current = true;
-      start(String(peerId));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [callState, peerId]);
+  // useEffect(() => {
+  //   if (callState === "CONNECTED" && peerId && !startedCallRef.current) {
+  //     console.log("[CALL] start mediasoup", peerId);
+  //     startedCallRef.current = true;
+  //     start(String(peerId));
+  //   }
+  //   // eslint-disable-next-line react-hooks/exhaustive-deps
+  // }, [callState, peerId]);
 
   useEffect(() => {
     if (callState !== "CONNECTED") {
@@ -87,13 +87,13 @@ export function FloatingCallBar() {
             User ID: {peerId}
           </Text>
         )}
-        {isConnected && (
+        {/* {isConnected && (
           <Text
             style={{ color: remoteAudioActive ? "lime" : "red", fontSize: 12 }}
           >
             {remoteAudioActive ? "Audio active" : "No audio"}
           </Text>
-        )}
+        )} */}
       </View>
 
       <View style={styles.right}>
