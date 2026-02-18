@@ -113,13 +113,14 @@ export function useCall() {
         return;
       }
 
+      await mediasoup?.start(roomId);
       startCall({ roomId, targetUserId });
 
       setRoomId(roomId);
       setCalleeId(targetUserId);
       setCallState("OUTGOING");
     },
-    [requestMicrophonePermission]
+    [mediasoup, requestMicrophonePermission]
   );
 
   const cancelOutgoingCall = useCallback(() => {

@@ -4,7 +4,7 @@ import { prepareAndroidAudio } from "@/utils/audioRoute";
 import * as mediasoupClient from "mediasoup-client";
 import { Consumer, Device, Producer, Transport } from "mediasoup-client/types";
 import { useEffect, useRef, useState } from "react";
-import { NativeModules, Platform } from "react-native";
+import { NativeModules } from "react-native";
 // import InCallManager from "react-native-incall-manager";
 import { mediaDevices, registerGlobals } from "react-native-webrtc";
 
@@ -45,18 +45,6 @@ export function useMediasoup() {
   /* =======================
      INTERNAL HELPERS
   ======================= */
-  function forceAndroidMediaAudio() {
-    if (Platform.OS !== "android") return;
-    if (audioRouteStartedRef.current) return;
-
-    console.log("🛠 ANDROID AUDIO PREPARE (BEFORE getUserMedia)");
-
-    // 🔥 SATU-SATUNYA YANG DIPERBOLEHKAN
-    prepareAndroidAudio();
-
-    audioRouteStartedRef.current = true;
-  }
-
   async function getLocalAudioTrack() {
     if (localStreamRef.current) {
       return localStreamRef.current.getAudioTracks()[0];
@@ -303,7 +291,7 @@ export function useMediasoup() {
     remoteStreamRef.current = stream;
     setRemoteStream(stream);
 
-    console.log("🔊 AudioSink stream", stream);
+    console.log("🔊 AudioSink stream", stream.id);
 
     /* =====================================================
     DEBUG RTP (INI AKAN > 0 KBPS JIKA SUKSES)
