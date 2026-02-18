@@ -45,12 +45,13 @@ app-example
 android/.gradle/
 android/build/
 android/app/build/
-android/*
-!android/app/
-!android/app/src/
-!android/app/src/main/
-!android/app/src/main/java/
-!android/app/src/main/java/**/*.kt
+android/build.gradle
+android/gradle.properties
+android/gradle/
+android/gradlew
+android/gradlew.bat
+android/settings.gradle
+android/.gitignore
 
 # Local config
 android/local.properties
