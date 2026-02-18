@@ -52,12 +52,12 @@ export default function RootLayout() {
   //   return <Redirect href="/login" />;
   // }
 
-  let DevManual: React.ComponentType<unknown> | null = null;
-  if (__DEV__) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    DevManual = require("./dev/ManualAuthTester")
-      .default as React.ComponentType<unknown>;
-  }
+  // let DevManual: React.ComponentType<unknown> | null = null;
+  // if (__DEV__) {
+  //   // eslint-disable-next-line @typescript-eslint/no-require-imports
+  //   DevManual = require("./dev/ManualAuthTester")
+  //     .default as React.ComponentType<unknown>;
+  // }
 
   return (
     <AuthBootstrap>
@@ -67,7 +67,7 @@ export default function RootLayout() {
             <SafeAreaView style={{ flex: 1 }}>
               <Slot />
 
-              {DevManual ? React.createElement(DevManual) : null}
+              {/* {DevManual ? React.createElement(DevManual) : null} */}
 
               <AppToast />
               <GlobalLoading />
