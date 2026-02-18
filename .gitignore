@@ -40,4 +40,17 @@ app-example
 
 # generated native folders
 /ios
-/android
+
+# Android build artifacts
+android/.gradle/
+android/build/
+android/app/build/
+android/*
+!android/app/
+!android/app/src/
+!android/app/src/main/
+!android/app/src/main/java/
+!android/app/src/main/java/**/*.kt
+
+# Local config
+android/local.properties
