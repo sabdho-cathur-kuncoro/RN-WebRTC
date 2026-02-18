@@ -10,7 +10,6 @@ import {
   whiteColor,
 } from "@/constants/theme";
 // import { useToast } from "@/hooks/useToast";
-import { useAuthStore } from "@/stores/auth.store";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { router, usePathname } from "expo-router";
 import React from "react";
@@ -87,7 +86,7 @@ const MENU_ITEMS: MenuItemConfig[] = [
 ];
 
 export default function Sidebar() {
-  const { logout } = useAuthStore();
+  // const { logout } = useAuthStore();
   // const toast = useToast();
   const pathname = usePathname();
 
@@ -162,7 +161,7 @@ export default function Sidebar() {
       ) : (
         <></>
       )}
-      <TouchableOpacity
+      {/* <TouchableOpacity
         style={styles.logoutBtn}
         onPress={logout}
         activeOpacity={0.8}
@@ -170,7 +169,7 @@ export default function Sidebar() {
         <Feather name="log-out" size={20} color={redColor} />
         <Gap width={10} />
         <Text style={{ color: redColor, fontWeight: "700" }}>Logout</Text>
-      </TouchableOpacity>
+      </TouchableOpacity> */}
 
       {/* Bottom section (e.g. user, version, etc.) */}
       {/* <View style={styles.footer}>
