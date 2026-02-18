@@ -7,7 +7,7 @@ const LiveMap = () => {
   return (
     <View style={styles.container}>
       <FocusAwareStatusBar barStyle={"light-content"} />
-      <MapComponent />
+      <MapComponent isOperation={true} />
     </View>
   );
 };
