@@ -1,4 +1,3 @@
-// components/Sidebar.tsx
 import {
   blueColor,
   blueRGBAColor,
@@ -9,7 +8,7 @@ import {
   strokeColor,
   whiteColor,
 } from "@/constants/theme";
-// import { useToast } from "@/hooks/useToast";
+import { useOperationStore } from "@/stores/operation.store";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { router, usePathname } from "expo-router";
 import React from "react";
@@ -86,8 +85,6 @@ const MENU_ITEMS: MenuItemConfig[] = [
 ];
 
 export default function Sidebar() {
-  // const { logout } = useAuthStore();
-  // const toast = useToast();
   const pathname = usePathname();
 
   const handlePress = (route: string) => {
@@ -107,11 +104,10 @@ export default function Sidebar() {
       {/* Menu */}
       <View style={styles.menuContainer}>
         <TouchableOpacity
-          // disabled
           onPress={() => {
-            // toast.info("Info", "Your changes were saved successfully");
             // logout();
             // storage.clearAll();
+            useOperationStore.getState().clearOperation();
             router.back();
           }}
           style={[styles.menuItem, { flexDirection: "row" }]}
@@ -124,7 +120,6 @@ export default function Sidebar() {
         <Gap height={10} />
         {MENU_ITEMS.map((item) => {
           const active = isActive(item.route);
-          // const isActive = segments[1] === item.route;
           return (
             <TouchableOpacity
               key={item.route}
@@ -161,16 +156,6 @@ export default function Sidebar() {
       ) : (
         <></>
       )}
-      {/* <TouchableOpacity
-        style={styles.logoutBtn}
-        onPress={logout}
-        activeOpacity={0.8}
-      >
-        <Feather name="log-out" size={20} color={redColor} />
-        <Gap width={10} />
-        <Text style={{ color: redColor, fontWeight: "700" }}>Logout</Text>
-      </TouchableOpacity> */}
-
       {/* Bottom section (e.g. user, version, etc.) */}
       {/* <View style={styles.footer}>
         <Text style={styles.footerText}>v1.0.0</Text>

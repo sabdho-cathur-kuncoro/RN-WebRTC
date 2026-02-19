@@ -1,13 +1,40 @@
 import Gap from "@/components/Gap";
 import Sidebar from "@/components/Sidebar";
 import { bgColor, dot, line, whiteColor } from "@/constants/theme";
+import { useOperationStore } from "@/stores/operation.store";
 import { Ionicons } from "@expo/vector-icons";
-import { Slot } from "expo-router";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { router, Slot } from "expo-router";
+import { useEffect } from "react";
+import {
+  BackHandler,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 export default function DrawerLayout() {
-  // const { width } = useWindowDimensions();
-  // const isLargeScreen = width >= 768;
+  const backAction = () => {
+    const hasOperation = useOperationStore.getState().getOperation();
+
+    if (hasOperation) {
+      useOperationStore.getState().clearOperation();
+      router.back();
+      return true;
+    }
+
+    return false;
+  };
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      backAction
+    );
+
+    return () => subscription.remove();
+  }, []);
   return (
     <View style={styles.root}>
       {/* App title */}
