@@ -281,20 +281,9 @@ const MapComponent = ({ isOperation = false }) => {
             Number.isFinite(startingLng) && (
               <Marker
                 coordinate={{ latitude: startingLat, longitude: startingLng }}
+                title="Titik Mulai"
               />
             )}
-          {isOperation ? (
-            <>
-              {startingPosition.length > 0 ? (
-                <Marker
-                  coordinate={{
-                    latitude: parseFloat(startingPosition[0]),
-                    longitude: parseFloat(startingPosition[1]),
-                  }}
-                ></Marker>
-              ) : null}
-            </>
-          ) : null}
         </MapView>
         {selectedVehicle && (
           <Animated.View
