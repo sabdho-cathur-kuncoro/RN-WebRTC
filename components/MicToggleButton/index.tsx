@@ -1,6 +1,7 @@
-import { greenColor, greyColor, whiteTextStyle } from "@/constants/theme";
+import { greenColor, greyColor, whiteColor } from "@/constants/theme";
 import { useCallContext } from "@/contexts/CallContext";
-import { Pressable, StyleSheet, Text } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { Pressable, StyleSheet } from "react-native";
 
 export function MicToggleButton() {
   const { isMuted, toggleMute, callState } = useCallContext();
@@ -13,17 +14,19 @@ export function MicToggleButton() {
       style={[styles.btn, isMuted ? styles.muted : styles.unmuted]}
       onPress={toggleMute}
     >
-      <Text style={[styles.text, whiteTextStyle]}>
-        {isMuted ? "Mic Off" : "Mic On"}
-      </Text>
+      <Ionicons
+        name={isMuted ? "mic-off" : "mic"}
+        size={28}
+        color={whiteColor}
+      />
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   btn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
     borderRadius: 10,
   },
   muted: {
@@ -31,9 +34,5 @@ const styles = StyleSheet.create({
   },
   unmuted: {
     backgroundColor: greenColor,
-  },
-  text: {
-    fontWeight: "600",
-    fontSize: 12,
   },
 });

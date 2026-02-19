@@ -4,21 +4,23 @@ import {
   navyColor,
   redColor,
   strokeColor,
+  whiteColor,
   whiteTextStyle,
 } from "@/constants/theme";
 import { useCallContext } from "@/contexts/CallContext";
 import { useMediasoupContext } from "@/contexts/MediaSoupContext";
 import { useCallTimer } from "@/hooks/useCallTimer";
 import { formatDuration } from "@/utils/formatDuration";
+import { MaterialIcons } from "@expo/vector-icons";
 import { useEffect, useRef } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import Gap from "../Gap";
 import { MicToggleButton } from "../MicToggleButton";
-import { SpeakerToggleButton } from "../SpeakerToggleButton";
 
 export function FloatingCallBar() {
   const { callState, calleeId, callerId, isMuted, endCurrentCall } =
     useCallContext();
-  const { start, cleanup, setMuted, remoteAudioActive } = useMediasoupContext();
+  const { cleanup, setMuted, remoteAudioActive } = useMediasoupContext();
   const startedCallRef = useRef(false);
 
   const isConnected = callState === "CONNECTED";
@@ -26,15 +28,6 @@ export function FloatingCallBar() {
 
   const seconds = useCallTimer(isConnected);
   const duration = formatDuration(seconds);
-
-  // useEffect(() => {
-  //   if (callState === "CONNECTED" && peerId && !startedCallRef.current) {
-  //     console.log("[CALL] start mediasoup", peerId);
-  //     startedCallRef.current = true;
-  //     start(String(peerId));
-  //   }
-  //   // eslint-disable-next-line react-hooks/exhaustive-deps
-  // }, [callState, peerId]);
 
   useEffect(() => {
     if (callState !== "CONNECTED") {
@@ -45,10 +38,6 @@ export function FloatingCallBar() {
   useEffect(() => {
     setMuted(isMuted);
   }, [isMuted, setMuted]);
-
-  // if (callState !== "CONNECTED" && callState !== "OUTGOING") return null;
-
-  // const label = callState === "OUTGOING" ? "Calling…" : "On call";
 
   let label = "";
 
@@ -98,7 +87,8 @@ export function FloatingCallBar() {
 
       <View style={styles.right}>
         <MicToggleButton />
-        <SpeakerToggleButton />
+        <Gap width={2} />
+        {/* <SpeakerToggleButton /> */}
         <Pressable
           style={[
             styles.endBtn,
@@ -111,9 +101,11 @@ export function FloatingCallBar() {
             endCurrentCall();
           }}
         >
-          <Text style={[styles.endText, whiteTextStyle]}>
-            {callState === "MISSED" ? "Close" : "End"}
-          </Text>
+          <MaterialIcons
+            name={callState === "MISSED" ? "phone-callback" : "call-end"}
+            size={28}
+            color={whiteColor}
+          />
         </Pressable>
       </View>
     </View>
@@ -153,8 +145,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   endBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
     borderRadius: 10,
   },
   endText: {
