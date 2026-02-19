@@ -25,11 +25,7 @@ class MainApplication : Application(), ReactApplication {
       object : DefaultReactNativeHost(this) {
         override fun getPackages(): List<ReactPackage> {
           val packages = PackageList(this).packages
-          packages.forEach {
-            android.util.Log.i("RN_PACKAGES", it.javaClass.name)
-          }
           packages.add(AudioRoutePackage())
-          android.util.Log.i("RN_PACKAGES", "Added AudioRoutePackage")
           return packages
         }
 
