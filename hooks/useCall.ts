@@ -32,6 +32,7 @@ export function useCall() {
   const [calleeId, setCalleeId] = useState<number | null>(null);
 
   const [isMuted, setIsMuted] = useState(false);
+  const [isSpeakerOn, setIsSpeakerOn] = useState(false);
   const [showMicModal, setShowMicModal] = useState(false);
 
   const callStateRef = useRef<CallUIState>(callState);
@@ -170,7 +171,7 @@ export function useCall() {
 
     if (!rid) return;
 
-    if (state === "OUTGOING") {
+    if (state === "OUTGOING" || state === "MISSED") {
       cancelCall({ roomId: rid, targetUserId: calleeId! });
       resetUI();
       return;
@@ -307,6 +308,8 @@ export function useCall() {
     isMuted,
     showMicModal,
 
+    isSpeakerOn,
+
     // outgoing
     startOutgoingCall,
     cancelOutgoingCall,
@@ -320,5 +323,7 @@ export function useCall() {
 
     // mic
     toggleMute: () => setIsMuted((v) => !v),
+    // speaker
+    toggleSpeaker: () => setIsSpeakerOn((v) => !v),
   };
 }
