@@ -1,4 +1,5 @@
 import {
+  dot,
   greenColor,
   greyColor,
   redColor,
@@ -64,7 +65,10 @@ export default function HomeScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.appTitle}>KOMANDO</Text>
-          <Ionicons name="notifications-outline" size={22} color="#E5E7EB" />
+          <TouchableOpacity>
+            <Ionicons name="notifications" size={22} color="#E5E7EB" />
+            <View style={dot} />
+          </TouchableOpacity>
         </View>
 
         {/* Welcome */}
